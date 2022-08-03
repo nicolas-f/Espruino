@@ -38,7 +38,8 @@ info = {
      #'SHA256',
      #'AES',
      'FILESYSTEM',
-     'TERMINAL'
+     'TERMINAL',
+     'PDM'
    ],
    'makefile' : [
      'WIZNET=1','W5100=1', # Add WIZnet support - W5100 is the most common Arduino shield

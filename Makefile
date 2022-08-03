@@ -573,6 +573,11 @@ ifeq ($(USE_TRIGGER),1)
   libs/trigger/trigger.c
 endif
 
+ifeq ($(USE_PDM),1)
+  INCLUDE += -I$(ROOT)/libs/pdm
+  WRAPPERSOURCES += libs/pdm/jswrap_pdm.c
+endif
+
 ifeq ($(USE_WIRINGPI),1)
   DEFINES += -DUSE_WIRINGPI
   LIBS += -lwiringPi
@@ -645,7 +650,6 @@ ifeq ($(USE_JIT),1)
   DEFINES += -DESPR_JIT
   SOURCES += src/jsjit.c src/jsjitc.c
 endif
-
 
 endif # BOOTLOADER ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ DON'T USE STUFF ABOVE IN BOOTLOADER
 
