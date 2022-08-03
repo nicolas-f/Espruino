@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ master ]
 
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      git-ref:
+        description: Git Ref (Optional)    
+        required: false
+        
+        
 permissions:
   contents: read
 
