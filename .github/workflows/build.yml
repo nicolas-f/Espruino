@@ -39,12 +39,13 @@ jobs:
         RELEASE: 1
         DFU_UPDATE_BUILD: 1
         BOARD: ${{ matrix.board }} 
-        UPLOADTOKEN: ${{ secrets.UPLOADTOKEN }}  
       run: |
         source ./scripts/provision.sh  ${{ matrix.board }}
         make
-        ./scripts/ci_upload.sh       
-       
+    - uses: actions/upload-artifact@v3
+      with:
+        name: artifacts ${{ matrix.board }}
+        path: espruino_*_pixljs.zip
  
 # Disable doc building for now 
 #  docs:
