@@ -18,7 +18,6 @@
 #include "jswrap_pdm.h"
 #include "jsvar.h"
 #include "jsinteractive.h"
-#include "nrf_drv_pdm.h"
 #include "pdm_espruino.h"
 
 
