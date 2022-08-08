@@ -100,12 +100,21 @@ typedef enum
 
 /**
  * @brief PDM clock frequency.
+ * Updated with additional supported frequencies
+ * see https://devzone.nordicsemi.com/f/nordic-q-a/15150/single-pdm-microphone-at-higher-pcm-sampling-rate/314213
  */
 typedef enum
 {
-    NRF_PDM_FREQ_1000K = PDM_PDMCLKCTRL_FREQ_1000K,  ///< PDM_CLK = 1.000 MHz.
-    NRF_PDM_FREQ_1032K = PDM_PDMCLKCTRL_FREQ_Default,  ///< PDM_CLK = 1.032 MHz.
-    NRF_PDM_FREQ_1067K = PDM_PDMCLKCTRL_FREQ_1067K   ///< PDM_CLK = 1.067 MHz.
+    NRF_PDM_FREQ_1000K = PDM_PDMCLKCTRL_FREQ_1000K,    ///< PDM_CLK= 1.000 MHz (32 MHz / 32) => Fs= 15625 Hz
+    NRF_PDM_FREQ_1032K = PDM_PDMCLKCTRL_FREQ_Default,  ///< PDM_CLK= 1.032 MHz (32 MHz / 31) => Fs= 16125 Hz 
+    NRF_PDM_FREQ_1067K = PDM_PDMCLKCTRL_FREQ_1067K,    ///< PDM_CLK= 1.067 MHz (32 MHz / 30) => Fs= 16667 Hz
+    NRF_PDM_FREQ_1231K = (0x09800000UL),               ///< PDM_CLK= 1.231 MHz (32 MHz / 26) => Fs= 19230 Hz
+    NRF_PDM_FREQ_1280K = (0x0A000000UL),               ///< PDM_CLK= 1.280 MHz (32 MHz / 25) => Fs= 20000 Hz
+    NRF_PDM_FREQ_1333K = (0x0A800000UL),               ///< PDM_CLK= 1.333 MHz (32 MHz / 24) => Fs= 20833 Hz
+    NRF_PDM_FREQ_2000K = (0x10000000UL),               ///< PDM_CLK= 2.000 MHz (32 MHz / 16) => Fs= 31250 Hz
+    NRF_PDM_FREQ_2667K = (0x15000000UL),               ///< PDM_CLK= 2.667 MHz (32 MHz / 12) => Fs= 41667 Hz
+    NRF_PDM_FREQ_3200K = (0x19000000UL),               ///< PDM_CLK= 3.200 MHz (32 MHz / 10) => Fs= 50000 Hz
+    NRF_PDM_FREQ_4000K = (0x20000000UL)                ///< PDM_CLK= 4.000 MHz (32 MHz /  8) => Fs= 62500 Hz
 } nrf_pdm_freq_t;
 
 
