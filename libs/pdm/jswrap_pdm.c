@@ -1,7 +1,7 @@
 #include "jswrap_pdm.h"
 #include "jsvar.h"
 #include "jsinteractive.h"
-#include "nrfx_pdm.h"
+#include "nrf_drv_pdm.h"
 
 
 /*JSON{
