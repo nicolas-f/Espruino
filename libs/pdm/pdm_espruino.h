@@ -9,15 +9,6 @@
  *
  */
 
-
-#ifndef PDM_CONFIG_MODE
-#define PDM_CONFIG_MODE NRF_PDM_MODE_MONO
-#endif
-
-#ifndef PDM_CONFIG_EDGE
-#define PDM_CONFIG_EDGE NRF_PDM_EDGE_LEFTFALLING
-#endif
-
 #include "nrf_drv_pdm.h"
 
 

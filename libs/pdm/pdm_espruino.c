@@ -9,6 +9,7 @@
  *
  */
 
+#include "pdm_espruino.h"
 
 
 
