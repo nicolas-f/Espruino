@@ -574,8 +574,11 @@ ifeq ($(USE_TRIGGER),1)
 endif
 
 ifeq ($(USE_PDM),1)
+  DEFINES += -DPDM_ENABLED=1
   INCLUDE += -I$(ROOT)/libs/pdm
-  WRAPPERSOURCES += libs/pdm/jswrap_pdm.c
+  WRAPPERSOURCES += libs/pdm/jswrap_pdm.c  
+  INCLUDE          += -I$(NRF5X_SDK_PATH)/components/drivers_nrf/pdm
+  TARGETSOURCES    += $(NRF5X_SDK_PATH)/components/drivers_nrf/pdm/nrf_drv_pdm.c
 endif
 
 ifeq ($(USE_WIRINGPI),1)
