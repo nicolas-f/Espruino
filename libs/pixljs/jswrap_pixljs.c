@@ -71,7 +71,7 @@ JsVarInt jswrap_pixljs_getBattery() {
     "return" : ["float", "A float in Volts" ]
 }
 */
-JsVarInt jswrap_pixljs_getBatteryVoltage() {
+JsVarFloat jswrap_pixljs_getBatteryVoltage() {
   return jshReadVRef();
 }
 
