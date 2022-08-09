@@ -67,7 +67,7 @@ JsVarInt jswrap_pixljs_getBattery() {
     "type" : "staticmethod",
     "class" : "Pixl",
     "name" : "getBatteryVoltage",
-    "generate" : "jswrap_espruino_getBatteryVoltage",
+    "generate" : "jswrap_pixljs_getBatteryVoltage",
     "return" : ["float", "A float in Volts" ]
 }
 */
