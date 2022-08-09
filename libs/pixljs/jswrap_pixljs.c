@@ -63,6 +63,17 @@ JsVarInt jswrap_pixljs_getBattery() {
 }
 
 
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "Pixl",
+    "name" : "getBatteryVoltage",
+    "generate" : "jswrap_espruino_getBatteryVoltage",
+    "return" : ["float", "A float in Volts" ]
+}
+*/
+JsVarInt jswrap_pixljs_getBattery() {
+  return jshReadVRef();
+}
 
 
 /*JSON{
