@@ -16,17 +16,6 @@
 
 /* DO_NOT_INCLUDE_IN_DOCS - this is a special token for common.py */
 
-/** @brief Enable PDM driver
- *
- *  Set to 1 to activate.
- *
- * @note This is an NRF_CONFIG macro.
- */
-#define PDM_ENABLED 1
-#define PDM_CONFIG_MODE 
-#define PDM_CONFIG_EDGE 
-#define PDM_CONFIG_CLOCK_FREQ 
-#define PDM_CONFIG_IRQ_PRIORITY 
 #include "jswrap_pdm.h"
 #include "jsvar.h"
 #include "jsinteractive.h"
@@ -53,7 +42,6 @@ void setup(Pin PIN_CLK, Pin PIN_DIN, int16_t * BUFF_A, int16_t * BUFF_B, uint16_
     jsError("Invalid pin supplied as an argument to Trig.setup");
     return;
   }
-  nrf_drv_pdm_config_t* pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(PIN_CLK, PIN_DIN, BUFF_A, BUFF_B, BUFF_LEN);
   jsiConsolePrint("Driver init ok!\r\n");
 }
 

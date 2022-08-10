@@ -579,6 +579,8 @@ ifeq ($(USE_PDM),1)
   INCLUDE += -I$(ROOT)/libs/pdm
   WRAPPERSOURCES += libs/pdm/jswrap_pdm.c  
   TARGETSOURCES    += $(ROOT)/targetlibs/nrfx/drivers/src/nrfx_pdm.c
+  SOURCES += \
+  libs/pdm/pdm_espruino.c
   INCLUDE          += -I$(ROOT)/targetlibs/nrfx
   INCLUDE          += -I$(ROOT)/targetlibs/nrfx/drivers/include
 endif
