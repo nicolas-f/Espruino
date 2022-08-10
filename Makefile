@@ -573,14 +573,15 @@ ifeq ($(USE_TRIGGER),1)
   libs/trigger/trigger.c
 endif
 
-#ifeq ($(USE_PDM),1)
-#  DEFINES += -DPDM_ENABLED=1
-#  DEFINES += -DUSE_PDM
-#  INCLUDE += -I$(ROOT)/libs/pdm
-#  WRAPPERSOURCES += libs/pdm/jswrap_pdm.c  
-#  INCLUDE          += -I$(NRF5X_SDK_PATH)/components/drivers_nrf/pdm
-#  TARGETSOURCES    += $(NRF5X_SDK_PATH)/components/drivers_nrf/pdm/nrf_drv_pdm.c
-#endif
+ifeq ($(USE_PDM),1)
+  DEFINES += -DPDM_ENABLED=1
+  DEFINES += -DUSE_PDM
+  INCLUDE += -I$(ROOT)/libs/pdm
+  WRAPPERSOURCES += libs/pdm/jswrap_pdm.c  
+  TARGETSOURCES    += $(ROOT)/targetlibs/nrfx/drivers/src/nrfx_pdm.c
+  INCLUDE          += -I$(ROOT)/targetlibs/nrfx
+  INCLUDE          += -I$(ROOT)/targetlibs/nrfx/drivers/include
+endif
 
 ifeq ($(USE_WIRINGPI),1)
   DEFINES += -DUSE_WIRINGPI
