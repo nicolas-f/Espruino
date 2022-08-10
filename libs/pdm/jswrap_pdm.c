@@ -19,8 +19,7 @@
 #include "jswrap_pdm.h"
 #include "jsvar.h"
 #include "jsinteractive.h"
-#include "pdm_espruino.h"
-
+#include "nrfx_pdm.h"
 
 /*JSON{
 "type" : "class",
@@ -33,7 +32,7 @@
 "name" : "setup",
 "generate" : "jswrap_pdm_setup"
 }*/
-void setup(Pin PIN_CLK, Pin PIN_DIN, int16_t * BUFF_A, int16_t * BUFF_B, uint16_t BUFF_LEN) {
+void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *func) {
   if (!jshIsPinValid(PIN_DIN)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
@@ -42,6 +41,13 @@ void setup(Pin PIN_CLK, Pin PIN_DIN, int16_t * BUFF_A, int16_t * BUFF_B, uint16_
     jsError("Invalid pin supplied as an argument to Trig.setup");
     return;
   }
+
+	// Start with default vales
+	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(PIN_CLK, PIN_DIN);
+
+
+	nrfx_err_t err = nrfx_pdm_init(&config, dataHandlerStatic);
+
   jsiConsolePrint("Driver init ok!\r\n");
 }
 
@@ -54,7 +60,7 @@ void setup(Pin PIN_CLK, Pin PIN_DIN, int16_t * BUFF_A, int16_t * BUFF_B, uint16_
     ["function","JsVar","A Function or String to be executed"]
   ]
 } */
-void start(JsVar *func) {
+void jswrap_pdm_start( ) {
 
 
 }
@@ -66,7 +72,7 @@ void start(JsVar *func) {
   "name" : "stop",
   "generate" : "jswrap_pdm_stop"
 } */
-void stop( ) {
+void jswrap_pdm_stop( ) {
 
 }
 
