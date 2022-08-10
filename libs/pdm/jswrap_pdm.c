@@ -21,6 +21,10 @@
 #include "jsinteractive.h"
 #include "nrfx_pdm.h"
 
+void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pEvent) {
+
+}
+
 /*JSON{
 "type" : "class",
 "class" : "Pdm"
@@ -45,8 +49,7 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *func) {
 	// Start with default vales
 	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(PIN_CLK, PIN_DIN);
 
-
-	nrfx_err_t err = nrfx_pdm_init(&config, dataHandlerStatic);
+	nrfx_err_t err = nrfx_pdm_init(&config, jswrap_pdm_handler);
 
   jsiConsolePrint("Driver init ok!\r\n");
 }
