@@ -581,6 +581,7 @@ ifeq ($(USE_PDM),1)
   TARGETSOURCES    += $(ROOT)/targetlibs/nrfx/drivers/src/nrfx_pdm.c
   INCLUDE          += -I$(ROOT)/targetlibs/nrfx
   INCLUDE          += -I$(ROOT)/targetlibs/nrfx/drivers/include
+  INCLUDE          += -I$(ROOT)/targetlibs/nrfx/templates
 endif
 
 ifeq ($(USE_WIRINGPI),1)
