@@ -575,6 +575,7 @@ endif
 
 ifeq ($(USE_PDM),1)
   DEFINES += -DPDM_ENABLED=1
+  DEFINES += -DNRFX_PDM_ENABLED=1
   DEFINES += -DUSE_PDM
   INCLUDE += -I$(ROOT)/libs/pdm
   WRAPPERSOURCES += libs/pdm/jswrap_pdm.c  
