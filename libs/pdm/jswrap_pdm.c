@@ -34,20 +34,25 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pEvent) {
 "type" : "staticmethod",
 "class" : "Pdm",
 "name" : "setup",
-"generate" : "jswrap_pdm_setup"
+"generate" : "jswrap_pdm_setup",
+  "params" : [
+    ["pin","pin","Clock pin of PDM microphone"],
+    ["pin","pin","Data pin of PDM microphone"],
+    ["function","JsVar","The function callback when samples are available"]
+  ]
 }*/
 void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *func) {
-  if (!jshIsPinValid(PIN_DIN)) {
+  if (!jshIsPinValid(pin_din)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
   }
-  if (!jshIsPinValid(PIN_CLK)) {
+  if (!jshIsPinValid(pin_clock)) {
     jsError("Invalid pin supplied as an argument to Trig.setup");
     return;
   }
 
-	// Start with default vales
-	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(PIN_CLK, PIN_DIN);
+	// Load PDM default values
+	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(pin_clock, pin_din);
 
 	nrfx_err_t err = nrfx_pdm_init(&config, jswrap_pdm_handler);
 
@@ -58,10 +63,7 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *func) {
   "type" : "function",
   "class" : "Pdm",
   "name" : "start",
-  "generate" : "jswrap_pdm_start",
-  "params" : [
-    ["function","JsVar","A Function or String to be executed"]
-  ]
+  "generate" : "jswrap_pdm_start"
 } */
 void jswrap_pdm_start( ) {
 
