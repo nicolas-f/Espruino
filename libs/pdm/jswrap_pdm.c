@@ -36,46 +36,46 @@ nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(22, 21);
 void jswrap_pdm_log_error( nrfx_err_t err ) {
   switch (err) {
   case NRFX_ERROR_INTERNAL:
-    jsiConsolePrint("PDM Internal error.\r\n");
+    jsError("PDM Internal error.\r\n");
     break;
   case NRFX_ERROR_NO_MEM:
-    jsiConsolePrint("PDM No memory for operation.\r\n");
+    jsError("PDM No memory for operation.\r\n");
     break;
   case NRFX_ERROR_NOT_SUPPORTED:
-    jsiConsolePrint("PDM Not supported.\r\n");
+    jsError("PDM Not supported.\r\n");
     break;
   case NRFX_ERROR_INVALID_PARAM:
-    jsiConsolePrint("PDM Invalid parameter.\r\n");
+    jsError("PDM Invalid parameter.\r\n");
     break;
   case NRFX_ERROR_INVALID_STATE:
-    jsiConsolePrint("PDM Invalid state, operation disallowed in this state.\r\n");
+    jsError("PDM Invalid state, operation disallowed in this state.\r\n");
     break;
   case NRFX_ERROR_INVALID_LENGTH:
-    jsiConsolePrint("PDM Invalid length.\r\n");
+    jsError("PDM Invalid length.\r\n");
     break;
   case NRFX_ERROR_FORBIDDEN:
-    jsiConsolePrint("PDM Operation is forbidden.\r\n");
+    jsError("PDM Operation is forbidden.\r\n");
     break;
   case NRFX_ERROR_NULL:
-    jsiConsolePrint("PDM Null pointer.\r\n");
+    jsError("PDM Null pointer.\r\n");
     break;
   case NRFX_ERROR_INVALID_ADDR:
-    jsiConsolePrint("PDM Bad memory address.\r\n");
+    jsError("PDM Bad memory address.\r\n");
     break;
   case NRFX_ERROR_BUSY:
-    jsiConsolePrint("PDM Busy.\r\n");
+    jsError("PDM Busy.\r\n");
     break;
   case NRFX_ERROR_ALREADY_INITIALIZED:
-    jsiConsolePrint("PDM Module already initialized.\r\n");
+    jsError("PDM Module already initialized.\r\n");
     break;
   case NRFX_ERROR_DRV_TWI_ERR_OVERRUN:
-    jsiConsolePrint("PDM TWI error: Overrun.\r\n");
+    jsError("PDM TWI error: Overrun.\r\n");
     break;
   case NRFX_ERROR_DRV_TWI_ERR_ANACK:
-    jsiConsolePrint("PDM TWI error: Address not acknowledged.\r\n");
+    jsError("PDM TWI error: Address not acknowledged.\r\n");
     break;
   case NRFX_ERROR_DRV_TWI_ERR_DNACK:
-    jsiConsolePrint("PDM TWI error: Data not acknowledged.\r\n");
+    jsError("PDM TWI error: Data not acknowledged.\r\n");
     break;
   default:
     break;
@@ -86,18 +86,21 @@ void jswrap_pdm_log_error( nrfx_err_t err ) {
 void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
   // NRFX request a location to save the samples
   // We will use 2 buffers in order to not loose samples
+  size_t buffer_length;        
 	if (pdm_evt->buffer_requested) {
+    int16_t * buffer_ptr;
 		if (jswrap_pdm_useBufferA && jswrap_pdm_bufferA) {
-			nrfx_pdm_buffer_set(jswrap_pdm_bufferA, jswrap_pdm_buffer_length);
+      buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
 		} else if(jswrap_pdm_bufferB){
-			nrfx_pdm_buffer_set(jswrap_pdm_bufferB, jswrap_pdm_buffer_length);
+      buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
 		}
+    nrfx_pdm_buffer_set(buffer_ptr, jswrap_pdm_buffer_length);
 		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
 	}
   if (pdm_evt->buffer_released) {
+    // We got samples
     int16_t *samples = (int16_t *)pdm_evt->buffer_released;
     if(jswrap_pdm_samples_callback) {
-      size_t buffer_length;        
       int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
       // find original Js objects for this array adress
       if(buffer_ptr == samples) {
@@ -202,6 +205,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 void jswrap_pdm_start( ) {
 	nrfx_err_t err = nrfx_pdm_start();
   jswrap_pdm_log_error(err); // log error if there is one
+  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferA);
 }
 
 
