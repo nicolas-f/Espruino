@@ -96,7 +96,14 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
   if (pdm_evt->buffer_released) {
     int16_t *samples = (int16_t *)pdm_evt->buffer_released;
     if(jswrap_pdm_samples_callback) {
-      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, );
+      size_t buffer_length;        
+      int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+      // find original Js objects for this array adress
+      if(buffer_ptr == samples) {
+        jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferA);
+      } else {
+        jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferB);
+      }
     }
   }
   jswrap_pdm_log_error(pdm_evt->error);
