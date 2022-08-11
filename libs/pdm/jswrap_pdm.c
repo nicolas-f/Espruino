@@ -30,7 +30,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
-nrfx_pdm_config_t jswrap_pdm_config;
+nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(22, 21);
 
 
 void jswrap_pdm_log_error( nrfx_err_t err ) {
@@ -135,11 +135,9 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
     return;
   }
 
-  jshPinSetState(pin_din, JSHPINSTATE_GPIO_IN);
-  jshPinSetState(pin_clock, JSHPINSTATE_GPIO_OUT);
-
-	// Load PDM default values
-	jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(pin_clock, pin_din);
+	// Set PDM user defined values
+	jswrap_pdm_config.pin_clk = pin_clock;
+  jswrap_pdm_config.pin_din = pin_din;
 }
 
 
@@ -179,6 +177,9 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     return 0;
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
+
+  jshPinSetState(jswrap_pdm_config.pin_din, JSHPINSTATE_GPIO_IN);
+  jshPinSetState(jswrap_pdm_config.pin_clk, JSHPINSTATE_GPIO_OUT);
 
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
