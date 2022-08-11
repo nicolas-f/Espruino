@@ -23,14 +23,17 @@
 
 bool jswrap_pdm_useBufferA = true;
 
-int16_t* jswrap_pdm_bufferA = NULL;
-int16_t* jswrap_pdm_bufferB = NULL;
+// Double buffering for not missing samples
+JsVar* jswrap_pdm_bufferA = NULL;
+JsVar* jswrap_pdm_bufferB = NULL;
+// buffer length
 uint16_t jswrap_pdm_buffer_length = 0;
+// JS Function to call when the samples are available. With samples in argument
+JsVar* jswrap_pdm_samples_callback = NULL;
 
 
 void jswrap_pdm_log_error( nrfx_err_t err ) {
-  switch (err)
-  {
+  switch (err) {
   case NRFX_ERROR_INTERNAL:
     jsiConsolePrint("PDM Internal error.\r\n");
     break;
@@ -79,16 +82,24 @@ void jswrap_pdm_log_error( nrfx_err_t err ) {
 }
 
 
-void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pEvent) {
-
-	if (pEvent->buffer_requested) {
-		if (jswrap_pdm_useBufferA) {
+void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
+  // NRFX request a location to save the samples
+  // We will use 2 buffers in order to not loose samples
+	if (pdm_evt->buffer_requested) {
+		if (jswrap_pdm_useBufferA && jswrap_pdm_bufferA) {
 			nrfx_pdm_buffer_set(jswrap_pdm_bufferA, jswrap_pdm_buffer_length);
-		} else {
+		} else if(jswrap_pdm_bufferB){
 			nrfx_pdm_buffer_set(jswrap_pdm_bufferB, jswrap_pdm_buffer_length);
 		}
 		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
 	}
+  if (pdm_evt->buffer_released) {
+    int16_t *samples = (int16_t *)pdm_evt->buffer_released;
+    if(jswrap_pdm_samples_callback) {
+      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, );
+    }
+  }
+  jswrap_pdm_log_error(pdm_evt->error);
 }
 
 /*JSON{
@@ -102,22 +113,55 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pEvent) {
 "name" : "setup",
 "generate" : "jswrap_pdm_setup",
   "params" : [
-    ["pin","pin","Clock pin of PDM microphone"],
-    ["pin","pin","Data pin of PDM microphone"],
-    ["function","JsVar","The function callback when samples are available"]
+    ["pin_clock","pin","Clock pin of PDM microphone"],
+    ["pin_din","pin","Data pin of PDM microphone"],
+    ["callback","JsVar","The function callback when samples are available"],
+    ["buffer_a","JsVar","Adress of the first samples buffer"],
+    ["buffer_b","JsVar","Adress of the second samples buffer (double buffering)"],
+    ["buffer_length","JsVarInt","Length of the samples buffer (same length for the two)"]
   ]
 }*/
-void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *func) {
+void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   if (!jshIsPinValid(pin_din)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
   }
   if (!jshIsPinValid(pin_clock)) {
-    jsError("Invalid pin supplied as an argument to Trig.setup");
+    jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
   }
+  if (!jsvIsFunction(callback)) {
+    jsExceptionHere(JSET_ERROR, "Function not supplied!");
+    return 0;
+  }
+  if (!jsvIsArrayBuffer(buffer_a)) {
+    jsExceptionHere(JSET_ERROR, "Buffer A is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
+    return 0;
+  }
+  if (!jsvIsArrayBuffer(buffer_b)) {
+    jsExceptionHere(JSET_ERROR, "Buffer B is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
+    return 0;
+  }
+  if(jsvGetLength(buffer_a) != jsvGetLength(buffer_b)) {
+    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same length");
+    return 0;
+  }
+  JsVarDataArrayBufferViewType arrayBufferTypeA = buffer_a->varData.arraybuffer.type;
+  JsVarDataArrayBufferViewType arrayBufferTypeB = buffer_a->varData.arraybuffer.type;
+  if(!(arrayBufferTypeA == ARRAYBUFFERVIEW_INT16 && arrayBufferTypeA == arrayBufferTypeB )) {    
+    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
+    return 0;
+  }
+  int buffer_length = (int)jsvGetLength(buffer_a);
+
   jshPinSetState(pin_din, JSHPINSTATE_GPIO_IN);
   jshPinSetState(pin_clock, JSHPINSTATE_GPIO_OUT);
+
+  jswrap_pdm_useBufferA = true;
+  jswrap_pdm_bufferA = buffer_a;
+  jswrap_pdm_bufferB = buffer_b;
+  jswrap_pdm_buffer_length = buffer_length;
+  jswrap_pdm_samples_callback = callback;
 
 	// Load PDM default values
 	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(pin_clock, pin_din);
