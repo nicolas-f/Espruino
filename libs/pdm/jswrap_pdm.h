@@ -15,8 +15,10 @@
 #include "jspin.h"
 #include "jsvar.h"
 
-void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar *callback, JsVar* buffer_a, JsVar* buffer_b);
+void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar *callback, JsVar* buffer_a, JsVar* buffer_b);
 
 void jswrap_pdm_start( );
 
 void jswrap_pdm_stop( );
+
+void jswrap_pdm_uninit( );

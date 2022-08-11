@@ -117,18 +117,17 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
 /*JSON{
 "type" : "staticmethod",
 "class" : "Pdm",
-"name" : "setup",
-"generate" : "jswrap_pdm_setup",
+"name" : "init",
+"generate" : "jswrap_pdm_init",
   "params" : [
     ["pin_clock","pin","Clock pin of PDM microphone"],
     ["pin_din","pin","Data pin of PDM microphone"],
     ["callback","JsVar","The function callback when samples are available"],
-    ["buffer_a","JsVar","Adress of the first samples buffer"],
-    ["buffer_b","JsVar","Adress of the second samples buffer (double buffering)"],
-    ["buffer_length","JsVarInt","Length of the samples buffer (same length for the two)"]
+    ["buffer_a","JsVar","First samples buffer of type Int16Array"],
+    ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size as buffer A"]
   ]
 }*/
-void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
+void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   if (!jshIsPinValid(pin_din)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
@@ -181,7 +180,7 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer
 
 
 /*JSON{
-  "type" : "function",
+  "type" : "staticmethod",
   "class" : "Pdm",
   "name" : "start",
   "generate" : "jswrap_pdm_start"
@@ -193,12 +192,27 @@ void jswrap_pdm_start( ) {
 
 
 /*JSON{
-  "type" : "function",
+  "type" : "staticmethod",
   "class" : "Pdm",
   "name" : "stop",
   "generate" : "jswrap_pdm_stop"
 } */
 void jswrap_pdm_stop( ) {
-
+	nrfx_err_t err = nrfx_pdm_stop();
+  jswrap_pdm_log_error(err); // log error if there is one
 }
 
+/*JSON{
+  "type" : "staticmethod",
+  "class" : "Pdm",
+  "name" : "uninit",
+  "generate" : "jswrap_pdm_uninit"
+} */
+void jswrap_pdm_uninit( ) {
+  nrfx_pdm_uninit();
+  jswrap_pdm_useBufferA = true;
+  jswrap_pdm_bufferA = NULL;
+  jswrap_pdm_bufferB = NULL;
+  jswrap_pdm_buffer_length = 0;
+  jswrap_pdm_samples_callback = NULL;
+}
