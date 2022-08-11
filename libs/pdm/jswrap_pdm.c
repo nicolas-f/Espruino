@@ -30,6 +30,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
+nrfx_pdm_config_t jswrap_pdm_config;
 
 
 void jswrap_pdm_log_error( nrfx_err_t err ) {
@@ -117,17 +118,14 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
 /*JSON{
 "type" : "staticmethod",
 "class" : "Pdm",
-"name" : "init",
-"generate" : "jswrap_pdm_init",
+"name" : "setup",
+"generate" : "jswrap_pdm_setup",
 "params" : [
   ["pin_clock","pin","Clock pin of PDM microphone"],
-  ["pin_din","pin","Data pin of PDM microphone"],
-  ["callback","JsVar","The function callback when samples are available"],
-  ["buffer_a","JsVarArray","First samples buffer of type Int16Array"],
-  ["buffer_b","JsVarArray","Second samples buffer (double buffering) must be same size as buffer A"]
+  ["pin_din","pin","Data pin of PDM microphone"]
 ]
 }*/
-void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
+void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
   if (!jshIsPinValid(pin_din)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
@@ -136,6 +134,28 @@ void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
   }
+
+  jshPinSetState(pin_din, JSHPINSTATE_GPIO_IN);
+  jshPinSetState(pin_clock, JSHPINSTATE_GPIO_OUT);
+
+	// Load PDM default values
+	jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(pin_clock, pin_din);
+}
+
+
+/*JSON{
+"type" : "staticmethod",
+"class" : "Pdm",
+"name" : "init",
+"generate" : "jswrap_pdm_init",
+"params" : [
+  ["callback","JsVar","The function callback when samples are available"],
+  ["buffer_a","JsVar","First samples buffer of type Int16Array"],
+  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"]
+]
+}*/
+void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
+
   if (!jsvIsFunction(callback)) {
     jsExceptionHere(JSET_ERROR, "Function not supplied!");
     return 0;
@@ -160,24 +180,17 @@ void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
 
-  jshPinSetState(pin_din, JSHPINSTATE_GPIO_IN);
-  jshPinSetState(pin_clock, JSHPINSTATE_GPIO_OUT);
-
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
   jswrap_pdm_bufferB = buffer_b;
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
 
-	// Load PDM default values
-	nrfx_pdm_config_t config = NRFX_PDM_DEFAULT_CONFIG(pin_clock, pin_din);
-
-	nrfx_err_t err = nrfx_pdm_init(&config, jswrap_pdm_handler);
+	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
 
   jsiConsolePrint("Driver init ok!\r\n");
 }
-
 
 /*JSON{
   "type" : "staticmethod",
