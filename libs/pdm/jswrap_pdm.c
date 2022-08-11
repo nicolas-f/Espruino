@@ -119,13 +119,13 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
 "class" : "Pdm",
 "name" : "init",
 "generate" : "jswrap_pdm_init",
-  "params" : [
-    ["pin_clock","pin","Clock pin of PDM microphone"],
-    ["pin_din","pin","Data pin of PDM microphone"],
-    ["callback","JsVar","The function callback when samples are available"],
-    ["buffer_a","JsVar","First samples buffer of type Int16Array"],
-    ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size as buffer A"]
-  ]
+"params" : [
+  ["pin_clock","pin","Clock pin of PDM microphone"],
+  ["pin_din","pin","Data pin of PDM microphone"],
+  ["callback","JsVar","The function callback when samples are available"],
+  ["buffer_a","JsVarArray","First samples buffer of type Int16Array"],
+  ["buffer_b","JsVarArray","Second samples buffer (double buffering) must be same size as buffer A"]
+]
 }*/
 void jswrap_pdm_init(Pin pin_clock, Pin pin_din, JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   if (!jshIsPinValid(pin_din)) {
