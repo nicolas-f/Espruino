@@ -82,35 +82,49 @@ void jswrap_pdm_log_error( nrfx_err_t err ) {
   }
 }
 
+int16_t bufA[128];
+int16_t bufB[128];
 
 void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
-  // NRFX request a location to save the samples
-  // We will use 2 buffers in order to not loose samples
-  size_t buffer_length;        
+
 	if (pdm_evt->buffer_requested) {
-    int16_t * buffer_ptr;
-		if (jswrap_pdm_useBufferA && jswrap_pdm_bufferA) {
-      buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-		} else if(jswrap_pdm_bufferB){
-      buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
+		if (jswrap_pdm_useBufferA) {
+      nrfx_pdm_buffer_set(bufA, 128);
+		} else {
+      nrfx_pdm_buffer_set(bufB, 128);
 		}
-    nrfx_pdm_buffer_set(buffer_ptr, jswrap_pdm_buffer_length);
 		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
 	}
-  if (pdm_evt->buffer_released) {
-    // We got samples
-    int16_t *samples = (int16_t *)pdm_evt->buffer_released;
-    if(jswrap_pdm_samples_callback) {
-      int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-      // find original Js objects for this array adress
-      if(buffer_ptr == samples) {
-        jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferA);
-      } else {
-        jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferB);
-      }
-    }
-  }
-  jswrap_pdm_log_error(pdm_evt->error);
+  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+
+
+  // NRFX request a location to save the samples
+  // We will use 2 buffers in order to not loose samples
+  // size_t buffer_length;        
+	// if (pdm_evt->buffer_requested) {
+  //   int16_t * buffer_ptr;
+	// 	if (jswrap_pdm_useBufferA && jswrap_pdm_bufferA) {
+  //     buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+	// 	} else if(jswrap_pdm_bufferB){
+  //     buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
+	// 	}
+  //   nrfx_pdm_buffer_set(buffer_ptr, jswrap_pdm_buffer_length);
+	// 	jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
+	// }
+  // if (pdm_evt->buffer_released) {
+  //   // We got samples
+  //   int16_t *samples = (int16_t *)pdm_evt->buffer_released;
+  //   if(jswrap_pdm_samples_callback) {
+  //     int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+  //     // find original Js objects for this array adress
+  //     if(buffer_ptr == samples) {
+  //       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+  //     } else {
+  //       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
+  //     }
+  //   }
+  // }
+  // jswrap_pdm_log_error(pdm_evt->error);
 }
 
 /*JSON{
@@ -205,7 +219,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 void jswrap_pdm_start( ) {
 	nrfx_err_t err = nrfx_pdm_start();
   jswrap_pdm_log_error(err); // log error if there is one
-  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, jswrap_pdm_bufferA);
+  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
 }
 
 
