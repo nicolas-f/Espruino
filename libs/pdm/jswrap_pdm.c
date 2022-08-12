@@ -195,8 +195,15 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
 
-  jshPinSetState(jswrap_pdm_config.pin_din, JSHPINSTATE_GPIO_IN);
-  jshPinSetState(jswrap_pdm_config.pin_clk, JSHPINSTATE_GPIO_OUT);
+	Hal_Pin_Info *pinMap = HAL_Pin_Map();
+
+	pinMode(jswrap_pdm_config.pin_clk, OUTPUT);
+	pinMode(datPin, INPUT);
+
+	attachInterruptDirect(PDM_IRQn, nrfx_pdm_irq_handler, false);
+
+	uint8_t nrfClkPin = (uint8_t)NRF_GPIO_PIN_MAP(pinMap[jswrap_pdm_config.pin_clk].gpio_port, pinMap[jswrap_pdm_config.pin_clk].gpio_pin);
+	uint8_t nrfDatPin = (uint8_t)NRF_GPIO_PIN_MAP(pinMap[jswrap_pdm_config.pin_din].gpio_port, pinMap[jswrap_pdm_config.pin_din].gpio_pin);
 
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
@@ -219,7 +226,6 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 void jswrap_pdm_start( ) {
 	nrfx_err_t err = nrfx_pdm_start();
   jswrap_pdm_log_error(err); // log error if there is one
-  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
 }
 
 
