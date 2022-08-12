@@ -168,7 +168,7 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
 "type" : "staticmethod",
 "class" : "Pdm",
 "name" : "fetch_data",
-"generate" : "jswrap_pdm_fetch_data"
+"generate" : "jswrap_pdm_fetch_data",
 "return" : ["bool", "Got fresh PDM data"]
 }*/
 bool jswrap_pdm_fetch_data( ) {
