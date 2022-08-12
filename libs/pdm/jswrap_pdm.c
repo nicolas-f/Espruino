@@ -22,6 +22,9 @@
 #include "nrfx_pdm.h"
 #include "nrf_gpio.h"
 
+#define _pin_clk NRF_GPIO_PIN_MAP(0,26)
+#define _pin_din NRF_GPIO_PIN_MAP(0,27)
+
 bool jswrap_pdm_useBufferA = true;
 
 // Double buffering for not missing samples
@@ -31,7 +34,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
-nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(22, 21);
+const nrfx_pdm_config_t jswrap_pdm_config;
 uint8_t           jswrap_pdm_pin_clk;  // user defined clock pin
 uint8_t           jswrap_pdm_pin_din;  // user defined data in pin
 
@@ -90,7 +93,7 @@ int16_t bufB[128];
 int16_t* jswrap_pdm_last_buffer = NULL;
 bool jswrap_pdm_buffer_set = false;
 
-void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
+static void jswrap_pdm_handler( const nrfx_pdm_evt_t *pdm_evt) {
 	if (pdm_evt->buffer_requested) {
 		if (jswrap_pdm_useBufferA) {
       nrfx_pdm_buffer_set(bufA, 128);
@@ -214,19 +217,19 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     return;
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
-
-  jswrap_pdm_config.pin_clk = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_clk);
-  jswrap_pdm_config.pin_din = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_din);
   
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
   jswrap_pdm_bufferB = buffer_b;
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
+
+  jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(_pin_clk, _pin_din);
+
   jswrap_pdm_config.skip_gpio_cfg = false;
   jswrap_pdm_config.skip_psel_cfg = false;
 
-	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, &jswrap_pdm_handler);
+	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
