@@ -87,10 +87,10 @@ void jswrap_pdm_log_error( nrfx_err_t err ) {
 
 int16_t bufA[128];
 int16_t bufB[128];
+int16_t* jswrap_pdm_last_buffer = NULL;
+bool jswrap_pdm_buffer_set = false;
 
 void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
-  jsiConsolePrint("Call to jswrap_pdm_handler\r\n");
-
 	if (pdm_evt->buffer_requested) {
 		if (jswrap_pdm_useBufferA) {
       nrfx_pdm_buffer_set(bufA, 128);
@@ -100,8 +100,8 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
 		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
 	}
   if (pdm_evt->buffer_released) {
-    int16_t *samples = (int16_t *)pdm_evt->buffer_released;
-    jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+    jswrap_pdm_last_buffer = (int16_t *)pdm_evt->buffer_released;
+    jswrap_pdm_buffer_set = true;
   }
 
 
@@ -162,6 +162,19 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
 	// Set PDM user defined values
 	jswrap_pdm_pin_clk = pin_clock;
   jswrap_pdm_pin_din = pin_din;
+}
+
+/*JSON{
+"type" : "staticmethod",
+"class" : "Pdm",
+"name" : "fetch_data",
+"generate" : "jswrap_pdm_fetch_data"
+"return" : ["bool", "Got fresh PDM data"]
+}*/
+bool jswrap_pdm_fetch_data( ) {
+  bool state = jswrap_pdm_buffer_set;
+  jswrap_pdm_buffer_set = false;
+  return state;
 }
 
 
