@@ -31,6 +31,8 @@ uint16_t jswrap_pdm_buffer_length = 0;
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
 nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(22, 21);
+uint8_t           jswrap_pdm_pin_clk;  // user defined clock pin
+uint8_t           jswrap_pdm_pin_din;  // user defined data in pin
 
 
 void jswrap_pdm_log_error( nrfx_err_t err ) {
@@ -86,6 +88,7 @@ int16_t bufA[128];
 int16_t bufB[128];
 
 void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
+  jsiConsolePrint("Call to jswrap_pdm_handler\r\n");
 
 	if (pdm_evt->buffer_requested) {
 		if (jswrap_pdm_useBufferA) {
@@ -95,7 +98,10 @@ void jswrap_pdm_handler( nrfx_pdm_evt_t const * const pdm_evt) {
 		}
 		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
 	}
-  jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+  if (pdm_evt->buffer_released) {
+    int16_t *samples = (int16_t *)pdm_evt->buffer_released;
+    jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+  }
 
 
   // NRFX request a location to save the samples
@@ -153,8 +159,8 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
   }
 
 	// Set PDM user defined values
-	jswrap_pdm_config.pin_clk = pin_clock;
-  jswrap_pdm_config.pin_din = pin_din;
+	jswrap_pdm_pin_clk = pin_clock;
+  jswrap_pdm_pin_din = pin_din;
 }
 
 
@@ -173,38 +179,30 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 
   if (!jsvIsFunction(callback)) {
     jsExceptionHere(JSET_ERROR, "Function not supplied!");
-    return 0;
+    return;
   }
   if (!jsvIsArrayBuffer(buffer_a)) {
     jsExceptionHere(JSET_ERROR, "Buffer A is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return 0;
+    return;
   }
   if (!jsvIsArrayBuffer(buffer_b)) {
     jsExceptionHere(JSET_ERROR, "Buffer B is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return 0;
+    return;
   }
   if(jsvGetLength(buffer_a) != jsvGetLength(buffer_b)) {
     jsExceptionHere(JSET_ERROR, "The two buffers must be of the same length");
-    return 0;
+    return;
   }
   JsVarDataArrayBufferViewType arrayBufferTypeA = buffer_a->varData.arraybuffer.type;
   JsVarDataArrayBufferViewType arrayBufferTypeB = buffer_a->varData.arraybuffer.type;
   if(!(arrayBufferTypeA == ARRAYBUFFERVIEW_INT16 && arrayBufferTypeA == arrayBufferTypeB )) {    
     jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
-    return 0;
+    return;
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
 
-	Hal_Pin_Info *pinMap = HAL_Pin_Map();
-
-	pinMode(jswrap_pdm_config.pin_clk, OUTPUT);
-	pinMode(datPin, INPUT);
-
-	attachInterruptDirect(PDM_IRQn, nrfx_pdm_irq_handler, false);
-
-	uint8_t nrfClkPin = (uint8_t)NRF_GPIO_PIN_MAP(pinMap[jswrap_pdm_config.pin_clk].gpio_port, pinMap[jswrap_pdm_config.pin_clk].gpio_pin);
-	uint8_t nrfDatPin = (uint8_t)NRF_GPIO_PIN_MAP(pinMap[jswrap_pdm_config.pin_din].gpio_port, pinMap[jswrap_pdm_config.pin_din].gpio_pin);
-
+  jswrap_pdm_config.pin_clk = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_clk);
+  jswrap_pdm_config.pin_din = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_din);
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
   jswrap_pdm_bufferB = buffer_b;
@@ -213,8 +211,6 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 
 	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
-
-  jsiConsolePrint("Driver init ok!\r\n");
 }
 
 /*JSON{
