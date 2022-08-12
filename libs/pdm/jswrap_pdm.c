@@ -34,7 +34,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
-const nrfx_pdm_config_t jswrap_pdm_config;
+nrfx_pdm_config_t jswrap_pdm_config;
 uint8_t           jswrap_pdm_pin_clk;  // user defined clock pin
 uint8_t           jswrap_pdm_pin_din;  // user defined data in pin
 
