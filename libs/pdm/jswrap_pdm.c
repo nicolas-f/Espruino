@@ -215,15 +215,19 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   }
   int buffer_length = (int)jsvGetLength(buffer_a);
 
+	pinMode(jswrap_pdm_pin_clk, OUTPUT);
+	pinMode(jswrap_pdm_pin_din, INPUT);
+
   jswrap_pdm_config.pin_clk = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_clk);
   jswrap_pdm_config.pin_din = NRF_GPIO_PIN_MAP(1, jswrap_pdm_pin_din);
+  
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
   jswrap_pdm_bufferB = buffer_b;
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
 
-	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
+	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, &jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
