@@ -20,6 +20,7 @@
 #include "jsvar.h"
 #include "jsinteractive.h"
 #include "nrfx_pdm.h"
+#include "nrf_gpio.h"
 
 bool jswrap_pdm_useBufferA = true;
 
