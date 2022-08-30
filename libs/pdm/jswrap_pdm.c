@@ -122,8 +122,8 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
 }*/
 void jswrap_pdm_setup(JsVar *options) {
 
-  Pin pin_clock = 5;
-  Pin pin_din = 6;
+  Pin pin_clock = JSH_PIN5;
+  Pin pin_din = JSH_PIN6;
   int frequency = 16000;
 
   if (jsvIsObject(options)) {
@@ -181,8 +181,8 @@ void jswrap_pdm_setup(JsVar *options) {
   }
 
 	// Set PDM user defined values
-	jswrap_pdm_pin_clk = pin_clock;
-  jswrap_pdm_pin_din = pin_din;
+	jswrap_pdm_pin_clk = pinInfo[pin_clock].pin;
+  jswrap_pdm_pin_din = pinInfo[pin_din].pin;
   jswrap_pdm_frequency = frequency;
 }
 
@@ -247,6 +247,8 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   int16_t * buffer_ptr_b = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
    buffer_ptr_a, buffer_ptr_b, buffer_length);
+
+  jswrap_pdm_config.clock_freq = jswrap_pdm_frequency;
 
 	ret_code_t err = nrf_drv_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
