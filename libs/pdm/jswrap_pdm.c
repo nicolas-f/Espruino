@@ -95,7 +95,7 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
-    int32_t buffer_length;
+    size_t buffer_length;
     int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
     // find original Js objects for this array adress
     if(buffer_ptr == samples) {
@@ -235,7 +235,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
     return;
   }
-  int buffer_length = (int)jsvGetLength(buffer_a);
+  size_t buffer_length = (int)jsvGetLength(buffer_a);
   
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
@@ -248,7 +248,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
    buffer_ptr_a, buffer_ptr_b, buffer_length);
 
-	ret_code_t err = nrf_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
+	ret_code_t err = nrf_drv_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
