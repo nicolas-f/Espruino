@@ -183,7 +183,6 @@ void jswrap_pdm_setup(JsVar *options) {
 	// Set PDM user defined values
 	jswrap_pdm_pin_clk = pinInfo[pin_clock].pin;
   jswrap_pdm_pin_din = pinInfo[pin_din].pin;
-  jswrap_pdm_frequency = frequency;
 }
 
 /*JSON{
