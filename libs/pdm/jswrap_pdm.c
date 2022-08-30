@@ -19,7 +19,7 @@
 #include "jswrap_pdm.h"
 #include "jsvar.h"
 #include "jsinteractive.h"
-#include "nrfx_pdm.h"
+#include "nrf_drv_pdm.h"
 #include "nrf_gpio.h"
 
 #define _pin_clk NRF_GPIO_PIN_MAP(0,26)
@@ -36,50 +36,47 @@ uint16_t jswrap_pdm_buffer_length = 0;
 JsVar* jswrap_pdm_samples_callback = NULL;
 uint8_t           jswrap_pdm_pin_clk;  // user defined clock pin
 uint8_t           jswrap_pdm_pin_din;  // user defined data in pin
+nrf_pdm_freq_t    jswrap_pdm_frequency = PDM_PDMCLKCTRL_FREQ_Default; // sampling frequency Fs= 16125 Hz 
 
-
-void jswrap_pdm_log_error( nrfx_err_t err ) {
+void jswrap_pdm_log_error( ret_code_t err ) {
   switch (err) {
-  case NRFX_ERROR_INTERNAL:
+  case NRF_ERROR_INTERNAL:
     jsError("PDM Internal error.\r\n");
     break;
-  case NRFX_ERROR_NO_MEM:
+  case NRF_ERROR_NO_MEM:
     jsError("PDM No memory for operation.\r\n");
     break;
-  case NRFX_ERROR_NOT_SUPPORTED:
+  case NRF_ERROR_NOT_SUPPORTED:
     jsError("PDM Not supported.\r\n");
     break;
-  case NRFX_ERROR_INVALID_PARAM:
+  case NRF_ERROR_INVALID_PARAM:
     jsError("PDM Invalid parameter.\r\n");
     break;
-  case NRFX_ERROR_INVALID_STATE:
-    jsError("PDM Invalid state, operation disallowed in this state.\r\n");
-    break;
-  case NRFX_ERROR_INVALID_LENGTH:
-    jsError("PDM Invalid length.\r\n");
-    break;
-  case NRFX_ERROR_FORBIDDEN:
-    jsError("PDM Operation is forbidden.\r\n");
-    break;
-  case NRFX_ERROR_NULL:
-    jsError("PDM Null pointer.\r\n");
-    break;
-  case NRFX_ERROR_INVALID_ADDR:
-    jsError("PDM Bad memory address.\r\n");
-    break;
-  case NRFX_ERROR_BUSY:
-    jsError("PDM Busy.\r\n");
-    break;
-  case NRFX_ERROR_ALREADY_INITIALIZED:
+  case NRF_ERROR_INVALID_STATE:
     jsError("PDM Module already initialized.\r\n");
     break;
-  case NRFX_ERROR_DRV_TWI_ERR_OVERRUN:
+  case NRF_ERROR_INVALID_LENGTH:
+    jsError("PDM Invalid length.\r\n");
+    break;
+  case NRF_ERROR_FORBIDDEN:
+    jsError("PDM Operation is forbidden.\r\n");
+    break;
+  case NRF_ERROR_NULL:
+    jsError("PDM Null pointer.\r\n");
+    break;
+  case NRF_ERROR_INVALID_ADDR:
+    jsError("PDM Bad memory address.\r\n");
+    break;
+  case NRF_ERROR_BUSY:
+    jsError("PDM Busy.\r\n");
+    break;
+  case NRF_ERROR_DRV_TWI_ERR_OVERRUN:
     jsError("PDM TWI error: Overrun.\r\n");
     break;
-  case NRFX_ERROR_DRV_TWI_ERR_ANACK:
+  case NRF_ERROR_DRV_TWI_ERR_ANACK:
     jsError("PDM TWI error: Address not acknowledged.\r\n");
     break;
-  case NRFX_ERROR_DRV_TWI_ERR_DNACK:
+  case NRF_ERROR_DRV_TWI_ERR_DNACK:
     jsError("PDM TWI error: Data not acknowledged.\r\n");
     break;
   default:
@@ -92,48 +89,21 @@ int16_t bufB[128];
 int16_t* jswrap_pdm_last_buffer = NULL;
 bool jswrap_pdm_buffer_set = false;
 
-static void jswrap_pdm_handler( const nrfx_pdm_evt_t *pdm_evt) {
-	if (pdm_evt->buffer_requested) {
-		if (jswrap_pdm_useBufferA) {
-      nrfx_pdm_buffer_set(bufA, 128);
-		} else {
-      nrfx_pdm_buffer_set(bufB, 128);
-		}
-		jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
-	}
-  if (pdm_evt->buffer_released) {
-    jswrap_pdm_last_buffer = (int16_t *)pdm_evt->buffer_released;
-    jswrap_pdm_buffer_set = true;
+static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
+  jswrap_pdm_buffer_set = true;
+  
+  // We got samples
+  // Send raw or do processing
+  if(jswrap_pdm_samples_callback) {
+    int32_t buffer_length;
+    int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+    // find original Js objects for this array adress
+    if(buffer_ptr == samples) {
+      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
+    } else {
+      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
+    }
   }
-
-
-  // NRFX request a location to save the samples
-  // We will use 2 buffers in order to not loose samples
-  // size_t buffer_length;        
-	// if (pdm_evt->buffer_requested) {
-  //   int16_t * buffer_ptr;
-	// 	if (jswrap_pdm_useBufferA && jswrap_pdm_bufferA) {
-  //     buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-	// 	} else if(jswrap_pdm_bufferB){
-  //     buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
-	// 	}
-  //   nrfx_pdm_buffer_set(buffer_ptr, jswrap_pdm_buffer_length);
-	// 	jswrap_pdm_useBufferA = !jswrap_pdm_useBufferA;
-	// }
-  // if (pdm_evt->buffer_released) {
-  //   // We got samples
-  //   int16_t *samples = (int16_t *)pdm_evt->buffer_released;
-  //   if(jswrap_pdm_samples_callback) {
-  //     int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-  //     // find original Js objects for this array adress
-  //     if(buffer_ptr == samples) {
-  //       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
-  //     } else {
-  //       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
-  //     }
-  //   }
-  // }
-  // jswrap_pdm_log_error(pdm_evt->error);
 }
 
 /*JSON{
@@ -147,11 +117,60 @@ static void jswrap_pdm_handler( const nrfx_pdm_evt_t *pdm_evt) {
 "name" : "setup",
 "generate" : "jswrap_pdm_setup",
 "params" : [
-  ["pin_clock","pin","Clock pin of PDM microphone"],
-  ["pin_din","pin","Data pin of PDM microphone"]
+  ["options","JsVar","Object `{clock: integer, din : integer., frequency: integer}` Supported frequencies are 15625, 16125, 16667, 19230, 20000, 20833, 31250, 41667, 50000, 62500 Hz"]
 ]
 }*/
-void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
+void jswrap_pdm_setup(JsVar *options) {
+
+  Pin pin_clock = 5;
+  Pin pin_din = 6;
+  int frequency = 16000;
+
+  if (jsvIsObject(options)) {
+    JsVar *v = jsvObjectGetChild(options,"clock", 0);
+    if (v) pin_clock = jsvGetIntegerAndUnLock(v);
+    v = jsvObjectGetChild(options,"din", 0);
+    if (v) pin_din = jsvGetIntegerAndUnLock(v);
+    v = jsvObjectGetChild(options,"frequency", 0);
+    if (v) frequency = jsvGetIntegerAndUnLock(v);
+  }
+  
+  switch (frequency)
+  {
+    case 15625:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1000K;
+      break;
+    case 16125:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1032K;
+      break;
+    case 16667:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1067K;
+      break;
+    case 19230:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1231K;
+      break;
+    case 20000:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1280K;
+      break;
+    case 20833:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_1333K;
+      break;
+    case 31250:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_2000K;
+      break;
+    case 41667:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_2667K;
+      break;
+    case 50000:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_3200K;
+      break;
+    case 62500:
+      jswrap_pdm_frequency = NRF_PDM_FREQ_4000K;
+      break;  
+    default:
+      break;
+  }
+
   if (!jshIsPinValid(pin_din)) {
     jsError("Invalid pin supplied as an argument to Pdm.setup");
     return;
@@ -164,6 +183,7 @@ void jswrap_pdm_setup(Pin pin_clock, Pin pin_din) {
 	// Set PDM user defined values
 	jswrap_pdm_pin_clk = pin_clock;
   jswrap_pdm_pin_din = pin_din;
+  jswrap_pdm_frequency = frequency;
 }
 
 /*JSON{
@@ -223,12 +243,12 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
 
-  nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din);
+  int16_t * buffer_ptr_a = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+  int16_t * buffer_ptr_b = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
+  nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
+   buffer_ptr_a, buffer_ptr_b, buffer_length);
 
-  jswrap_pdm_config.skip_gpio_cfg = false;
-  jswrap_pdm_config.skip_psel_cfg = false;
-
-	nrfx_err_t err = nrfx_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
+	ret_code_t err = nrf_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
@@ -239,7 +259,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   "generate" : "jswrap_pdm_start"
 } */
 void jswrap_pdm_start( ) {
-	nrfx_err_t err = nrfx_pdm_start();
+	ret_code_t err = nrf_drv_pdm_start();
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
@@ -251,7 +271,7 @@ void jswrap_pdm_start( ) {
   "generate" : "jswrap_pdm_stop"
 } */
 void jswrap_pdm_stop( ) {
-	nrfx_err_t err = nrfx_pdm_stop();
+	ret_code_t err = nrf_drv_pdm_stop();
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
@@ -262,7 +282,7 @@ void jswrap_pdm_stop( ) {
   "generate" : "jswrap_pdm_uninit"
 } */
 void jswrap_pdm_uninit( ) {
-  nrfx_pdm_uninit();
+  nrf_drv_pdm_uninit();
   jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = NULL;
   jswrap_pdm_bufferB = NULL;
