@@ -74,7 +74,7 @@ typedef struct
 static nrfx_pdm_cb_t m_cb;
 
 
-void nrfx_pdm_irq_handler(void)
+void PDM_IRQHandler(void)
 {
     if (nrf_pdm_event_check(NRF_PDM0, NRF_PDM_EVENT_STARTED))
     {
