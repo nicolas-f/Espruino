@@ -223,9 +223,6 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
 
-
-	attachInterruptDirect(PDM_IRQn, nrfx_pdm_irq_handler, false);
-
   nrfx_pdm_config_t jswrap_pdm_config = NRFX_PDM_DEFAULT_CONFIG(_pin_clk, _pin_din);
 
   jswrap_pdm_config.skip_gpio_cfg = false;
