@@ -25,5 +25,4 @@ void jswrap_pdm_stop( );
 
 void jswrap_pdm_uninit( );
 
-bool jswrap_pdm_fetch_data( );
 

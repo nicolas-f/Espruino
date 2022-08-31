@@ -22,21 +22,23 @@
 #include "nrf_drv_pdm.h"
 #include "nrf_gpio.h"
 
-#define _pin_clk NRF_GPIO_PIN_MAP(0,26)
-#define _pin_din NRF_GPIO_PIN_MAP(0,27)
-
-bool jswrap_pdm_useBufferA = true;
-
 // Double buffering for not missing samples
 JsVar* jswrap_pdm_bufferA = NULL;
 JsVar* jswrap_pdm_bufferB = NULL;
-// buffer length
-uint16_t jswrap_pdm_buffer_length = 0;
+int16_t* jswrap_pdm_bufferA_data = NULL;
+int16_t* jswrap_pdm_bufferB_data = NULL;
+uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
+nrf_pdm_mode_t jswrap_pdm_mode = (nrf_pdm_mode_t)1;       ///< Interface operation mode. Default to mono
+nrf_pdm_edge_t jswrap_pdm_edge = (nrf_pdm_edge_t)PDM_CONFIG_EDGE;       ///< Sampling mode.
+uint8_t           jswrap_pdm_pin_clk;                                   // user defined clock pin
+uint8_t           jswrap_pdm_pin_din;                                   // user defined data in pin
+nrf_pdm_freq_t    jswrap_pdm_frequency = PDM_PDMCLKCTRL_FREQ_Default;   // sampling frequency Fs= 16125 Hz 
+nrf_pdm_gain_t jswrap_pdm_gain_l= NRF_PDM_GAIN_DEFAULT;                 ///< Left channel gain.
+nrf_pdm_gain_t jswrap_pdm_gain_r = NRF_PDM_GAIN_DEFAULT;                ///< Right channel gain.
+uint8_t        jswrap_pdm_interrupt_priority = PDM_CONFIG_IRQ_PRIORITY; ///< Interrupt priority.
+
 // JS Function to call when the samples are available. With samples in argument
 JsVar* jswrap_pdm_samples_callback = NULL;
-uint8_t           jswrap_pdm_pin_clk;  // user defined clock pin
-uint8_t           jswrap_pdm_pin_din;  // user defined data in pin
-nrf_pdm_freq_t    jswrap_pdm_frequency = PDM_PDMCLKCTRL_FREQ_Default; // sampling frequency Fs= 16125 Hz 
 
 void jswrap_pdm_log_error( ret_code_t err ) {
   switch (err) {
@@ -84,21 +86,14 @@ void jswrap_pdm_log_error( ret_code_t err ) {
   }
 }
 
-int16_t bufA[128];
-int16_t bufB[128];
 int16_t* jswrap_pdm_last_buffer = NULL;
-bool jswrap_pdm_buffer_set = false;
 
-static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
-  jswrap_pdm_buffer_set = true;
-  
+static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {  
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
-    size_t buffer_length;
-    int16_t * buffer_ptr = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
     // find original Js objects for this array adress
-    if(buffer_ptr == samples) {
+    if(jswrap_pdm_bufferA_data == samples) {
       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
     } else {
       jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
@@ -117,14 +112,16 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
 "name" : "setup",
 "generate" : "jswrap_pdm_setup",
 "params" : [
-  ["options","JsVar","Object `{clock: integer, din : integer., frequency: integer}` Supported frequencies are 15625, 16125, 16667, 19230, 20000, 20833, 31250, 41667, 50000, 62500 Hz"]
+  ["options","JsVar","Object `{clock: integer, din : integer, frequency: integer, lgain: float, rgain: float, mono: boolean, sampling_mode: integer, interrupt_priority: integer}` Supported frequencies are 15625, 16125, 16667, 19230, 20000, 20833, 31250, 41667, 50000, 62500 Hz. Gain is expressed in dB and must be between -20;20"]
 ]
 }*/
 void jswrap_pdm_setup(JsVar *options) {
 
   Pin pin_clock = JSH_PIN5;
   Pin pin_din = JSH_PIN6;
-  int frequency = 16000;
+  int frequency = 16125;
+  int mode = 1; // 0 stereo 1 mono
+
 
   if (jsvIsObject(options)) {
     JsVar *v = jsvObjectGetChild(options,"clock", 0);
@@ -133,6 +130,17 @@ void jswrap_pdm_setup(JsVar *options) {
     if (v) pin_din = jsvGetIntegerAndUnLock(v);
     v = jsvObjectGetChild(options,"frequency", 0);
     if (v) frequency = jsvGetIntegerAndUnLock(v);
+    // output gain adjustment, in 0.5 dB steps, around the default module gain
+    v = jsvObjectGetChild(options,"lgain", 0);
+    if (v) jswrap_pdm_gain_l = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, jsvGetFloatAndUnLock(v) / 0.5 + NRF_PDM_GAIN_DEFAULT));
+    v = jsvObjectGetChild(options,"rgain", 0);
+    if (v) jswrap_pdm_gain_r = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, jsvGetFloatAndUnLock(v) / 0.5 + NRF_PDM_GAIN_DEFAULT));
+    v = jsvObjectGetChild(options,"mono", 0);
+    if (v) jswrap_pdm_mode = jsvGetBoolAndUnLock(v);
+    v = jsvObjectGetChild(options,"sampling_mode", 0);
+    if (v) jswrap_pdm_edge = jsvGetIntegerAndUnLock(v);
+    v = jsvObjectGetChild(options,"interrupt_priority", 0);
+    if (v) jswrap_pdm_interrupt_priority = jsvGetIntegerAndUnLock(v);
   }
   
   switch (frequency)
@@ -188,20 +196,6 @@ void jswrap_pdm_setup(JsVar *options) {
 /*JSON{
 "type" : "staticmethod",
 "class" : "Pdm",
-"name" : "fetch_data",
-"generate" : "jswrap_pdm_fetch_data",
-"return" : ["bool", "Got fresh PDM data"]
-}*/
-bool jswrap_pdm_fetch_data( ) {
-  bool state = jswrap_pdm_buffer_set;
-  jswrap_pdm_buffer_set = false;
-  return state;
-}
-
-
-/*JSON{
-"type" : "staticmethod",
-"class" : "Pdm",
 "name" : "init",
 "generate" : "jswrap_pdm_init",
 "params" : [
@@ -236,18 +230,22 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   }
   size_t buffer_length = (int)jsvGetLength(buffer_a);
   
-  jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = buffer_a;
   jswrap_pdm_bufferB = buffer_b;
   jswrap_pdm_buffer_length = buffer_length;
   jswrap_pdm_samples_callback = callback;
 
-  int16_t * buffer_ptr_a = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-  int16_t * buffer_ptr_b = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
+  jswrap_pdm_bufferA_data = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
+  jswrap_pdm_bufferB_data = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
-   buffer_ptr_a, buffer_ptr_b, buffer_length);
+   jswrap_pdm_bufferA_data, jswrap_pdm_bufferB_data, buffer_length);
 
   jswrap_pdm_config.clock_freq = jswrap_pdm_frequency;
+  jswrap_pdm_config.edge = jswrap_pdm_edge;
+  jswrap_pdm_config.gain_l = jswrap_pdm_gain_l;
+  jswrap_pdm_config.gain_r = jswrap_pdm_gain_r;
+  jswrap_pdm_config.interrupt_priority = jswrap_pdm_interrupt_priority;
+  jswrap_pdm_config.mode = jswrap_pdm_mode;
 
 	ret_code_t err = nrf_drv_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
@@ -284,9 +282,10 @@ void jswrap_pdm_stop( ) {
 } */
 void jswrap_pdm_uninit( ) {
   nrf_drv_pdm_uninit();
-  jswrap_pdm_useBufferA = true;
   jswrap_pdm_bufferA = NULL;
   jswrap_pdm_bufferB = NULL;
+  jswrap_pdm_bufferA_data = NULL;
+  jswrap_pdm_bufferB_data = NULL;
   jswrap_pdm_buffer_length = 0;
   jswrap_pdm_samples_callback = NULL;
 }
