@@ -132,9 +132,9 @@ void jswrap_pdm_setup(JsVar *options) {
     if (v) frequency = jsvGetIntegerAndUnLock(v);
     // output gain adjustment, in 0.5 dB steps, around the default module gain
     v = jsvObjectGetChild(options,"lgain", 0);
-    if (v) jswrap_pdm_gain_l = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, jsvGetFloatAndUnLock(v) / 0.5 + NRF_PDM_GAIN_DEFAULT));
+    if (v) jswrap_pdm_gain_l = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, (int8_t)(jsvGetFloatAndUnLock(v) / 0.5) + (int8_t)(NRF_PDM_GAIN_DEFAULT)));
     v = jsvObjectGetChild(options,"rgain", 0);
-    if (v) jswrap_pdm_gain_r = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, jsvGetFloatAndUnLock(v) / 0.5 + NRF_PDM_GAIN_DEFAULT));
+    if (v) jswrap_pdm_gain_r = (uint8_t)MIN(NRF_PDM_GAIN_MAXIMUM, MAX(NRF_PDM_GAIN_MINIMUM, (int8_t)(jsvGetFloatAndUnLock(v) / 0.5) + (int8_t)(NRF_PDM_GAIN_DEFAULT)));
     v = jsvObjectGetChild(options,"mono", 0);
     if (v) jswrap_pdm_mode = jsvGetBoolAndUnLock(v);
     v = jsvObjectGetChild(options,"sampling_mode", 0);
