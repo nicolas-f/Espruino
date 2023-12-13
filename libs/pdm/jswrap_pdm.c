@@ -247,7 +247,7 @@ void jswrap_pdm_start( ) {
   "name" : "rms",
   "generate" : "jswrap_pdm_rms"
 } */
-static double jswrap_pdm_rms() {
+double jswrap_pdm_rms() {
   return jswrap_pdm_rms;
 }
 
