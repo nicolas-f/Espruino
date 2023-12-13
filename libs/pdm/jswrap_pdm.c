@@ -244,7 +244,8 @@ void jswrap_pdm_start( ) {
   "type" : "staticmethod",
   "class" : "Pdm",
   "name" : "rms",
-  "generate" : "jswrap_pdm_rms"
+  "generate" : "jswrap_pdm_rms",
+  "return" : ["float", "RMS value" ]
 } */
 double jswrap_pdm_rms() {
   return jswrap_pdm_rms_value;
