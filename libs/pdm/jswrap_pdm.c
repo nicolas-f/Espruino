@@ -29,7 +29,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 int16_t* jswrap_pdm_bufferA_data = NULL;
 int16_t* jswrap_pdm_bufferB_data = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
-double jswrap_pdm_rms = 0.0;
+double jswrap_pdm_rms_value = 0.0;
 nrf_pdm_mode_t jswrap_pdm_mode = (nrf_pdm_mode_t)1;       ///< Interface operation mode. Default to mono
 nrf_pdm_edge_t jswrap_pdm_edge = (nrf_pdm_edge_t)PDM_CONFIG_EDGE;       ///< Sampling mode.
 uint8_t           jswrap_pdm_pin_clk;                                   // user defined clock pin
@@ -94,7 +94,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
     sample = (long)(samples[i]);
     sum += sample*sample;
   }
-  jswrap_pdm_rms = sqrt((double)sum / length);
+  jswrap_pdm_rms_value = sqrt((double)sum / length);
 }
 
 /*JSON{
@@ -116,8 +116,6 @@ void jswrap_pdm_setup(JsVar *options) {
   Pin pin_clock = JSH_PIN5;
   Pin pin_din = JSH_PIN6;
   int frequency = 16125;
-  int mode = 1; // 0 stereo 1 mono
-
 
   if (jsvIsObject(options)) {
     JsVar *v = jsvObjectGetChild(options,"clock", 0);
@@ -203,13 +201,13 @@ void jswrap_pdm_init(int cache_size) {
     jsError("Invalid cache size, must be between 1 and 16384.\r\n");
     return;
   }
-  jswrap_pdm_bufferA = jsvNewArrayBufferWithPtr(cache_size*2, &jswrap_pdm_bufferA_data);
+  jswrap_pdm_bufferA = jsvNewArrayBufferWithPtr(cache_size*2, (char**)&jswrap_pdm_bufferA_data);
   if (!jswrap_pdm_bufferA) {
     jsError("Not enough free memory for this buffer size.\r\n");
     jsvUnLock(jswrap_pdm_bufferA);
     return;
   }
-  jswrap_pdm_bufferB = jsvNewArrayBufferWithPtr(cache_size*2, &jswrap_pdm_bufferB_data);
+  jswrap_pdm_bufferB = jsvNewArrayBufferWithPtr(cache_size*2, (char**)&jswrap_pdm_bufferB_data);
   if (!jswrap_pdm_bufferB) {
     jsError("Not enough free memory for this buffer size.\r\n");
     jsvUnLock(jswrap_pdm_bufferB);
@@ -249,7 +247,7 @@ void jswrap_pdm_start( ) {
   "generate" : "jswrap_pdm_rms"
 } */
 double jswrap_pdm_rms() {
-  return jswrap_pdm_rms;
+  return jswrap_pdm_rms_value;
 }
 
 /*JSON{
