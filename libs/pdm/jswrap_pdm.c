@@ -21,6 +21,7 @@
 #include "jsinteractive.h"
 #include "nrf_drv_pdm.h"
 #include "nrf_gpio.h"
+#include <math.h>
 
 // Double buffering for not missing samples
 JsVar* jswrap_pdm_bufferA = NULL;
@@ -28,6 +29,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 int16_t* jswrap_pdm_bufferA_data = NULL;
 int16_t* jswrap_pdm_bufferB_data = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
+double jswrap_pdm_rms = 0.0;
 nrf_pdm_mode_t jswrap_pdm_mode = (nrf_pdm_mode_t)1;       ///< Interface operation mode. Default to mono
 nrf_pdm_edge_t jswrap_pdm_edge = (nrf_pdm_edge_t)PDM_CONFIG_EDGE;       ///< Sampling mode.
 uint8_t           jswrap_pdm_pin_clk;                                   // user defined clock pin
@@ -36,9 +38,6 @@ nrf_pdm_freq_t    jswrap_pdm_frequency = PDM_PDMCLKCTRL_FREQ_Default;   // sampl
 nrf_pdm_gain_t jswrap_pdm_gain_l= NRF_PDM_GAIN_DEFAULT;                 ///< Left channel gain.
 nrf_pdm_gain_t jswrap_pdm_gain_r = NRF_PDM_GAIN_DEFAULT;                ///< Right channel gain.
 uint8_t        jswrap_pdm_interrupt_priority = PDM_CONFIG_IRQ_PRIORITY; ///< Interrupt priority.
-
-// JS Function to call when the samples are available. With samples in argument
-JsVar* jswrap_pdm_samples_callback = NULL;
 
 void jswrap_pdm_log_error( ret_code_t err ) {
   switch (err) {
@@ -86,19 +85,15 @@ void jswrap_pdm_log_error( ret_code_t err ) {
   }
 }
 
-int16_t* jswrap_pdm_last_buffer = NULL;
-
-static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {  
+static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
   // We got samples
-  // Send raw or do processing
-  if(jswrap_pdm_samples_callback) {
-    // find original Js objects for this array adress
-    if(jswrap_pdm_bufferA_data == samples) {
-      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
-    } else {
-      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
-    }
+  int64_t sum = 0;
+  long sample;
+  for(int i=0; i < length; i++) {
+    sample = (long)(samples[i]);
+    sum += sample*sample;
   }
+  jswrap_pdm_rms = sqrt((double)sum / length);
 }
 
 /*JSON{
@@ -199,44 +194,28 @@ void jswrap_pdm_setup(JsVar *options) {
 "name" : "init",
 "generate" : "jswrap_pdm_init",
 "params" : [
-  ["callback","JsVar","The function callback when samples are available"],
-  ["buffer_a","JsVar","First samples buffer of type Int16Array"],
-  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"]
+  ["cache_size","int","Internal cache of audio samples"]
 ]
 }*/
-void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
+void jswrap_pdm_init(int cache_size) {
+  if(cache_size <= 0 || cache_size > 16384) {
+    jsError("Invalid cache size, must be between 1 and 16384.\r\n");
+    return;
+  }
+  jswrap_pdm_bufferA = jsvNewArrayBufferWithPtr(cache_size*2, &jswrap_pdm_bufferA_data);
+  if (!jswrap_pdm_bufferA) {
+    jsError("Not enough free memory for this buffer size.\r\n");
+    jsvUnLock(jswrap_pdm_bufferA);
+    return 0;
+  }
+  jswrap_pdm_bufferB = jsvNewArrayBufferWithPtr(cache_size*2, &jswrap_pdm_bufferB_data);
+  if (!jswrap_pdm_bufferB) {
+    jsError("Not enough free memory for this buffer size.\r\n");
+    jsvUnLock(jswrap_pdm_bufferB);
+    return 0;
+  }
+  jswrap_pdm_buffer_length = (uint16_t)cache_size;
 
-  if (!jsvIsFunction(callback)) {
-    jsExceptionHere(JSET_ERROR, "Function not supplied!");
-    return;
-  }
-  if (!jsvIsArrayBuffer(buffer_a)) {
-    jsExceptionHere(JSET_ERROR, "Buffer A is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return;
-  }
-  if (!jsvIsArrayBuffer(buffer_b)) {
-    jsExceptionHere(JSET_ERROR, "Buffer B is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return;
-  }
-  if(jsvGetLength(buffer_a) != jsvGetLength(buffer_b)) {
-    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same length");
-    return;
-  }
-  JsVarDataArrayBufferViewType arrayBufferTypeA = buffer_a->varData.arraybuffer.type;
-  JsVarDataArrayBufferViewType arrayBufferTypeB = buffer_a->varData.arraybuffer.type;
-  if(!(arrayBufferTypeA == ARRAYBUFFERVIEW_INT16 && arrayBufferTypeA == arrayBufferTypeB )) {    
-    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
-    return;
-  }
-  size_t buffer_length = (int)jsvGetLength(buffer_a);
-  
-  jswrap_pdm_bufferA = buffer_a;
-  jswrap_pdm_bufferB = buffer_b;
-  jswrap_pdm_buffer_length = buffer_length;
-  jswrap_pdm_samples_callback = callback;
-
-  jswrap_pdm_bufferA_data = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferA, &buffer_length);
-  jswrap_pdm_bufferB_data = (int16_t *)jsvGetDataPointer(jswrap_pdm_bufferB, &buffer_length);
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
    jswrap_pdm_bufferA_data, jswrap_pdm_bufferB_data, buffer_length);
 
@@ -262,6 +241,15 @@ void jswrap_pdm_start( ) {
   jswrap_pdm_log_error(err); // log error if there is one
 }
 
+/*JSON{
+  "type" : "staticmethod",
+  "class" : "Pdm",
+  "name" : "rms",
+  "generate" : "jswrap_pdm_rms"
+} */
+static double jswrap_pdm_rms() {
+  return jswrap_pdm_rms;
+}
 
 /*JSON{
   "type" : "staticmethod",
@@ -282,10 +270,11 @@ void jswrap_pdm_stop( ) {
 } */
 void jswrap_pdm_uninit( ) {
   nrf_drv_pdm_uninit();
+  jsvUnRef(jswrap_pdm_bufferA);
+  jsvUnRef(jswrap_pdm_bufferB);
   jswrap_pdm_bufferA = NULL;
   jswrap_pdm_bufferB = NULL;
   jswrap_pdm_bufferA_data = NULL;
   jswrap_pdm_bufferB_data = NULL;
   jswrap_pdm_buffer_length = 0;
-  jswrap_pdm_samples_callback = NULL;
 }

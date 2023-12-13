@@ -17,7 +17,9 @@
 
 void jswrap_pdm_setup(JsVar *options);
 
-void jswrap_pdm_init(JsVar *callback, JsVar* buffer_a, JsVar* buffer_b);
+void jswrap_pdm_init(int cache_size);
+
+double jswrap_pdm_rms();
 
 void jswrap_pdm_start( );
 
