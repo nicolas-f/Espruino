@@ -88,13 +88,11 @@ void jswrap_pdm_log_error( ret_code_t err ) {
 static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   uint16_t* samples = (uint16_t*)buffer;
   // We got samples
-  int64_t sum = 0;
-  long sample;
+  double sum = 0;
   for(int i=0; i < length; i++) {
-    sample = (long)(samples[i]);
-    sum += sample*sample;
+    sum += (double)((float)samples[i]*(float)samples[i]);
   }
-  jswrap_pdm_rms_value = sqrt((double)sum / length);
+  jswrap_pdm_rms_value = sqrt(sum / (double)length);
 }
 
 /*JSON{
