@@ -85,7 +85,8 @@ void jswrap_pdm_log_error( ret_code_t err ) {
   }
 }
 
-static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
+static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
+  uint16_t* samples = (uint16_t*)buffer;
   // We got samples
   int64_t sum = 0;
   long sample;
@@ -206,18 +207,18 @@ void jswrap_pdm_init(int cache_size) {
   if (!jswrap_pdm_bufferA) {
     jsError("Not enough free memory for this buffer size.\r\n");
     jsvUnLock(jswrap_pdm_bufferA);
-    return 0;
+    return;
   }
   jswrap_pdm_bufferB = jsvNewArrayBufferWithPtr(cache_size*2, &jswrap_pdm_bufferB_data);
   if (!jswrap_pdm_bufferB) {
     jsError("Not enough free memory for this buffer size.\r\n");
     jsvUnLock(jswrap_pdm_bufferB);
-    return 0;
+    return;
   }
   jswrap_pdm_buffer_length = (uint16_t)cache_size;
 
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
-   jswrap_pdm_bufferA_data, jswrap_pdm_bufferB_data, buffer_length);
+   jswrap_pdm_bufferA_data, jswrap_pdm_bufferB_data, jswrap_pdm_buffer_length);
 
   jswrap_pdm_config.clock_freq = jswrap_pdm_frequency;
   jswrap_pdm_config.edge = jswrap_pdm_edge;
