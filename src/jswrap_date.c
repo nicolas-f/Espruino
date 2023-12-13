@@ -95,12 +95,12 @@ JsVarFloat getDstChangeTime(int y, int dow_number, int dow, int month, int day_o
 // https://github.com/deirdreobyrne/CalendarAndDST
 int jsdGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst) {
 #ifndef ESPR_NO_DAYLIGHT_SAVING
-  JsVar *dst = jsvObjectGetChild(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR, 0);
+  JsVar *dst = jsvObjectGetChildIfExists(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR);
   if ((dst) && (jsvIsArrayBuffer(dst)) && (jsvGetLength(dst) == 12) && (dst->varData.arraybuffer.type == ARRAYBUFFERVIEW_INT16)) {
     int y;
     JsVarInt dstSetting[12];
     JsvArrayBufferIterator it;
-  
+
     jsvArrayBufferIteratorNew(&it, dst, 0);
     y = 0;
     while (y < 12) {
@@ -113,7 +113,7 @@ int jsdGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst) {
       JsVarFloat sec = ms/1000;
       JsVarFloat dstStart,dstEnd;
       bool dstActive;
-      
+
       getDateFromDayNumber((int)(sec/86400),&y,0,0);
       dstStart = getDstChangeTime(y, dstSetting[2], dstSetting[3], dstSetting[4], dstSetting[5], dstSetting[6], 1, dstSetting[0], dstSetting[1], is_local_time);
       dstEnd = getDstChangeTime(y, dstSetting[7], dstSetting[8], dstSetting[9], dstSetting[10], dstSetting[11], 0, dstSetting[0], dstSetting[1], is_local_time);
@@ -130,7 +130,7 @@ int jsdGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst) {
   }
 #endif
   if (is_dst) *is_dst = false;
-  return jsvGetIntegerAndUnLock(jsvObjectGetChild(execInfo.hiddenRoot, JS_TIMEZONE_VAR, 0));
+  return jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(execInfo.hiddenRoot, JS_TIMEZONE_VAR));
 }
 
 // this needs to be called just before a TimeInDay is used -- unless the TimeInDay timezone has been determined by other means.
@@ -241,7 +241,10 @@ timezone set by `E.setTimeZone(...)` will be _ignored_.
   "return" : ["float",""]
 }
 Get the number of milliseconds elapsed since 1970 (or on embedded platforms,
-since startup)
+since startup).
+
+**Note:** Desktop JS engines return an integer value for `Date.now()`, however Espruino
+returns a floating point value, accurate to fractions of a millisecond.
  */
 JsVarFloat jswrap_date_now() {
   // Not quite sure why we need this, but (JsVarFloat)jshGetSystemTime() / (JsVarFloat)jshGetTimeFromMilliseconds(1) in inaccurate on STM32
@@ -269,7 +272,8 @@ JsVar *jswrap_date_from_milliseconds(JsVarFloat time) {
   "typescript" : [
     "new(): Date;",
     "new(value: number | string): Date;",
-    "new(year: number, month: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): Date;"
+    "new(year: number, month: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): Date;",
+    "(arg?: any): string;"
   ]
 }
 Creates a date object
@@ -357,7 +361,7 @@ Return the number of milliseconds since 1970
 Return the number of milliseconds since 1970
  */
 JsVarFloat jswrap_date_getTime(JsVar *date) {
-  return jsvGetFloatAndUnLock(jsvObjectGetChild(date, "ms", 0));
+  return jsvGetFloatAndUnLock(jsvObjectGetChildIfExists(date, "ms"));
 }
 /*JSON{
   "type" : "method",
@@ -495,8 +499,8 @@ int jswrap_date_getFullYear(JsVar *parent) {
   "params" : [
     ["hoursValue","int","number of hours, 0..23"],
     ["minutesValue","JsVar","number of minutes, 0..59"],
-    ["secondsValue","JsVar","optional - number of seconds, 0..59"],
-    ["millisecondsValue","JsVar","optional - number of milliseconds, 0..999"]
+    ["secondsValue","JsVar","[optional] number of seconds, 0..59"],
+    ["millisecondsValue","JsVar","[optional] number of milliseconds, 0..999"]
   ],
   "return" : ["float","The number of milliseconds since 1970"],
   "typescript" : "setHours(hoursValue: number, minutesValue?: number, secondsValue?: number, millisecondsValue?: number): number;"
@@ -524,8 +528,8 @@ JsVarFloat jswrap_date_setHours(JsVar *parent, int hoursValue, JsVar *minutesVal
   "generate" : "jswrap_date_setMinutes",
   "params" : [
     ["minutesValue","int","number of minutes, 0..59"],
-    ["secondsValue","JsVar","optional - number of seconds, 0..59"],
-    ["millisecondsValue","JsVar","optional - number of milliseconds, 0..999"]
+    ["secondsValue","JsVar","[optional] number of seconds, 0..59"],
+    ["millisecondsValue","JsVar","[optional] number of milliseconds, 0..999"]
   ],
   "return" : ["float","The number of milliseconds since 1970"],
   "typescript" : "setMinutes(minutesValue: number, secondsValue?: number, millisecondsValue?: number): number;"
@@ -551,7 +555,7 @@ JsVarFloat jswrap_date_setMinutes(JsVar *parent, int minutesValue, JsVar *second
   "generate" : "jswrap_date_setSeconds",
   "params" : [
     ["secondsValue","int","number of seconds, 0..59"],
-    ["millisecondsValue","JsVar","optional - number of milliseconds, 0..999"]
+    ["millisecondsValue","JsVar","[optional] number of milliseconds, 0..999"]
   ],
   "return" : ["float","The number of milliseconds since 1970"],
   "typescript" : "setSeconds(secondsValue: number, millisecondsValue?: number): number;"
@@ -617,7 +621,7 @@ JsVarFloat jswrap_date_setDate(JsVar *parent, int dayValue) {
   "generate" : "jswrap_date_setMonth",
   "params" : [
     ["yearValue","int","The month, between 0 and 11"],
-    ["dayValue","JsVar","optional - the day, between 0 and 31"]
+    ["dayValue","JsVar","[optional] the day, between 0 and 31"]
   ],
   "return" : ["float","The number of milliseconds since 1970"],
   "typescript" : "setMonth(yearValue: number, dayValue?: number): number;"
@@ -643,8 +647,8 @@ JsVarFloat jswrap_date_setMonth(JsVar *parent, int monthValue, JsVar *dayValue) 
   "generate" : "jswrap_date_setFullYear",
   "params" : [
     ["yearValue","int","The full year - eg. 1989"],
-    ["monthValue","JsVar","optional - the month, between 0 and 11"],
-    ["dayValue","JsVar","optional - the day, between 0 and 31"]
+    ["monthValue","JsVar","[optional] the month, between 0 and 11"],
+    ["dayValue","JsVar","[optional] the day, between 0 and 31"]
   ],
   "return" : ["float","The number of milliseconds since 1970"],
   "typescript" : "setFullYear(yearValue: number, monthValue?: number, dayValue?: number): number;"

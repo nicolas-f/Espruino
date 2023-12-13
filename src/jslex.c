@@ -12,6 +12,7 @@
  * ----------------------------------------------------------------------------
  */
 #include "jslex.h"
+#include "jsparse.h"
 #ifndef SAVE_ON_FLASH
 #include "jsflash.h"
 #endif
@@ -51,6 +52,7 @@ void jslCharPosNew(JslCharPos *dstpos, JsVar *src, size_t tokenStart) {
 
 /// Return the next character (do not move to the next character)
 static JSLEX_INLINE char jslNextCh() {
+  assert(lex->it.ptr || lex->it.charIdx==0);
   return (char)(lex->it.ptr ? READ_FLASH_UINT8(&lex->it.ptr[lex->it.charIdx]) : 0);
 }
 
@@ -94,14 +96,20 @@ static JSLEX_INLINE void jslTokenAppendChar(char ch) {
   }
 }
 
-static bool jslIsToken(const char *token, int startOffset) {
+// Check if a token matches (IGNORING FIRST CHAR)
+static bool jslCheckToken(const char *token, short int tokenId) {
   int i;
-  for (i=startOffset;i<lex->tokenl;i++) {
+  token--; // because we add 1 in for loop
+  for (i=1;i<lex->tokenl;i++) {
     if (lex->token[i]!=token[i]) return false;
     // if token is smaller than lex->token, there will be a null char
     // which will be different from the token
   }
-  return token[lex->tokenl] == 0; // only match if token ends now
+  if (token[lex->tokenl] == 0) { // only match if token ends now
+    lex->tk = tokenId;
+    return true;
+  }
+  return false;
 }
 
 typedef enum {
@@ -273,18 +281,69 @@ static JSLEX_INLINE void jslSingleChar() {
   jslGetNextCh();
 }
 
+#ifdef ESPR_UNICODE_SUPPORT
+/* We've now parsed some of a String and we didn't think it was UTF8,
+but we hit a UTF8 character. For instance:
+
+"F\xF6n F\u00F6n" where '\xF6' wouldn't have made the string Unicode but '\u00F6' would
+
+We need to go back over the String that
+we parsed and convert any non-ASCII escape codes we came across back to UTF8.
+*/
+static void jslConvertTokenValueUTF8(JsvStringIterator *it) {
+  if (!lex->tokenValue) return; // no token value - so don't do anything
+  JsVar *utf8str = jsvNewFromEmptyString();
+  if (!utf8str) return;
+  jsvStringIteratorFree(it);
+  JsvStringIterator src;
+  jsvStringIteratorNew(&src, lex->tokenValue, 0);
+  jsvStringIteratorNew(it, utf8str, 0);
+  while (jsvStringIteratorHasChar(&src)) {
+    // This is basically what's in jsvConvertToUTF8AndUnLock but we leave the iterator allocated
+    char ch = jsvStringIteratorGetCharAndNext(&src);
+    if (jsUTF8IsStartChar(ch)) {
+      // convert to a UTF8 sequence
+      char utf8[4];
+      unsigned int l = jsUTF8Encode((unsigned char)ch, utf8);
+      for (unsigned int i=0;i<l;i++)
+        jsvStringIteratorAppend(it, utf8[i]);
+    } else // normal ASCII
+      jsvStringIteratorAppend(it, ch);
+  }
+  jsvStringIteratorFree(&src);
+  jsvUnLock(lex->tokenValue);
+  lex->tokenValue = utf8str;
+}
+#endif
+
 static void jslLexString() {
   char delim = lex->currCh;
-  lex->tokenValue = jsvNewFromEmptyString();
-  if (!lex->tokenValue) {
-    lex->tk = LEX_EOF;
-    return;
-  }
   JsvStringIterator it;
-  jsvStringIteratorNew(&it, lex->tokenValue, 0);
+  it.var = 0; // now jsvStringIteratorAppend/Free will silently do nothing
+  if (JSP_SHOULD_EXECUTE) { // tokenValue already set to 0
+    // Only allocate a string/iterator (and so only append) if we are executing
+    lex->tokenValue = jsvNewFromEmptyString();
+    if (!lex->tokenValue) {
+      lex->tk = LEX_EOF;
+      return;
+    }
+    jsvStringIteratorNew(&it, lex->tokenValue, 0);
+  }
   // strings...
   jslGetNextCh();
-  while (lex->currCh && lex->currCh!=delim) {
+  char lastCh = delim;
+  int nesting = 0;
+#ifdef ESPR_UNICODE_SUPPORT
+  bool hadCharsInUTF8Range = false;
+  int high_surrogate = 0;
+  lex->isUTF8 = false;
+#endif  // ESPR_UNICODE_SUPPORT
+  while (lex->currCh && (lex->currCh!=delim || nesting)) {
+    // in template literals, cope with a literal inside another: `${`Hello`}`
+    if (delim=='`') {
+      if ((lastCh=='$' || nesting) && lex->currCh=='{') nesting++;
+      if (nesting && lex->currCh=='}') nesting--;
+    }
     if (lex->currCh == '\\') {
       jslGetNextCh();
       char ch = lex->currCh;
@@ -297,17 +356,69 @@ static void jslLexString() {
       case 'v'  : ch = 0x0B; jslGetNextCh(); break;
       case 'u' :
       case 'x' : { // hex digits
-        char buf[5] = "0x??";
-        if (lex->currCh == 'u') {
-          // We don't support unicode, so we just take the bottom 8 bits
-          // of the unicode character
-          jslGetNextCh();
+        char buf[5];
+        bool isUTF8 = lex->currCh=='u';
+        jslGetNextCh();
+        unsigned int len = isUTF8?4:2, n=0;
+        while (len--) {
+          if (!lex->currCh || !isHexadecimal(lex->currCh)) {
+            jsExceptionHere(JSET_ERROR, "Invalid escape sequence");
+            break;
+          }
+          buf[n++] = lex->currCh;
           jslGetNextCh();
         }
-        jslGetNextCh();
-        buf[2] = lex->currCh; jslGetNextCh();
-        buf[3] = lex->currCh; jslGetNextCh();
-        ch = (char)stringToInt(buf);
+        buf[n] = 0;
+        int codepoint = (int)stringToIntWithRadix(buf,16,NULL,NULL);
+#ifdef ESPR_UNICODE_SUPPORT
+        /* We're cheating a bit here. To stay compatible with original Espruino code
+          we say that if a char is specified with \x## then we copy its value in verbatim (no UTF8)
+          but if it's sent with \u#### then we apply UTF8 encoding */
+        if (isUTF8) {
+          if (high_surrogate) {
+            if (!jsUnicodeIsLowSurrogate(codepoint)) {
+              // Maybe we should append a replacement char here, but
+              // we are raising an exception, so probably it doesn't matter
+              jsExceptionHere(JSET_ERROR, "Unmatched Unicode surrogate");
+              if (jsUnicodeIsHighSurrogate(codepoint)) {
+                high_surrogate = codepoint;
+                continue;
+              }
+            } else {
+              // Calculate the actual codepoint
+              codepoint = 0x10000 + ((codepoint & 0x03FF) |
+                          ((high_surrogate & 0x03FF) << 10));
+            }
+            high_surrogate = 0;
+          } else if (jsUnicodeIsHighSurrogate(codepoint)) {
+            high_surrogate = codepoint;
+            continue;
+          } else if (jsUnicodeIsLowSurrogate(codepoint)) {
+            jsExceptionHere(JSET_ERROR, "Unmatched Unicode surrogate");
+          }
+        }
+        if (isUTF8 || lex->isUTF8) { // if this char is UTF8 *or* this string is now UTF8
+          len = jsUTF8Encode(codepoint, buf);
+          if (jsUTF8IsStartChar(buf[0])) {
+            if (!lex->isUTF8 && hadCharsInUTF8Range)
+              jslConvertTokenValueUTF8(&it);
+            lex->isUTF8 = true;
+          }
+          ch = buf[len-1]; // last char is in 'ch' as jsvStringIteratorAppend(..., ch) is called later on
+          if (len>1) {
+            n=0;
+            while (n<len-1) {
+              char c = buf[n++];
+              jsvStringIteratorAppend(&it, c);
+            }
+          }
+        } else { // !isUTF8
+          hadCharsInUTF8Range |= jsUTF8IsStartChar((char)codepoint);
+#else
+        {
+#endif
+          ch = (char)codepoint;
+        }
       } break;
       default:
         if (lex->currCh>='0' && lex->currCh<='7') {
@@ -330,17 +441,55 @@ static void jslLexString() {
         }
         break;
       }
-      jslTokenAppendChar(ch);
+      lastCh = ch;
       jsvStringIteratorAppend(&it, ch);
     } else if (lex->currCh=='\n' && delim!='`') {
       /* Was a newline - this is now allowed
        * unless we're a template string */
       break;
     } else {
-      jslTokenAppendChar(lex->currCh);
-      jsvStringIteratorAppend(&it, lex->currCh);
-      jslGetNextCh();
+#ifdef ESPR_UNICODE_SUPPORT
+      if (jsUTF8IsStartChar(lex->currCh)) {
+        char buf[4];
+        buf[0] = lex->currCh;
+        bool isValidUTF8 = true;
+        unsigned int len = jsUTF8LengthFromChar(lex->currCh);
+        for (unsigned int i=1;i<len;i++) {
+          jslGetNextCh();
+          buf[i] = lex->currCh;
+          if ((lex->currCh&0xC0) != 0x80) {
+            // not a valid UTF8 sequence! We'll actually just carry
+            // on as we would if we were a non-UTF8 Espruino implementation
+            isValidUTF8 = false;
+            len = i+1;
+            break;
+          }
+        }
+        if (isValidUTF8) {
+          if (!lex->isUTF8 && hadCharsInUTF8Range)
+            jslConvertTokenValueUTF8(&it);
+          lex->isUTF8 = true;
+        } else
+          hadCharsInUTF8Range = true;
+        // copy data back in
+        for (unsigned int i=0;i<len-1;i++)
+            jsvStringIteratorAppend(&it, buf[i]);
+      }
+#endif
+      {
+        jsvStringIteratorAppend(&it, lex->currCh);
+        lastCh = lex->currCh;
+        jslGetNextCh();
+      }
     }
+#ifdef ESPR_UNICODE_SUPPORT
+    if (high_surrogate) {
+      // Leftover high surrogate, but it is too late for replacement char
+      // Maybe we should fix this at some stage if it really matters at all
+      jsExceptionHere(JSET_ERROR, "Unmatched Unicode surrogate");
+      high_surrogate = 0;
+    }
+#endif  // ESPR_UNICODE_SUPPORT
   }
   jsvStringIteratorFree(&it);
   if (delim=='`')
@@ -353,14 +502,18 @@ static void jslLexString() {
 }
 
 static void jslLexRegex() {
-  lex->tokenValue = jsvNewFromEmptyString();
-  if (!lex->tokenValue) {
-    lex->tk = LEX_EOF;
-    return;
-  }
   JsvStringIterator it;
-  jsvStringIteratorNew(&it, lex->tokenValue, 0);
-  jsvStringIteratorAppend(&it, '/');
+  it.var = 0; // now jsvStringIteratorAppend/Free will silently do nothing
+  if (JSP_SHOULD_EXECUTE) { // tokenValue already set to 0
+    // Only allocate a string/iterator (and so only append) if we are executing
+    lex->tokenValue = jsvNewFromEmptyString();
+    if (!lex->tokenValue) {
+      lex->tk = LEX_EOF;
+      return;
+    }
+    jsvStringIteratorNew(&it, lex->tokenValue, 0);
+    jsvStringIteratorAppend(&it, '/');
+  }
   // strings...
   jslGetNextCh();
   while (lex->currCh && lex->currCh!='/') {
@@ -387,7 +540,6 @@ static void jslLexRegex() {
         lex->currCh=='m' ||
         lex->currCh=='y' ||
         lex->currCh=='u') {
-      jslTokenAppendChar(lex->currCh);
       jsvStringIteratorAppend(&it, lex->currCh);
       jslGetNextCh();
     }
@@ -398,7 +550,7 @@ static void jslLexRegex() {
 void jslSkipWhiteSpace() {
   jslSkipWhiteSpace_start:
   // Skip whitespace
-  while (isWhitespace(lex->currCh))
+  while (isWhitespaceInline(lex->currCh))
     jslGetNextCh();
   // Search for comments
   if (lex->currCh=='/') {
@@ -457,63 +609,64 @@ void jslGetNextToken() {
       if (lex->tk == LEX_R_THIS) lex->hadThisKeyword=true;
       break;
     case JSLJT_ID: {
-      while (isAlpha(lex->currCh) || isNumeric(lex->currCh) || lex->currCh=='$') {
+      while (isAlphaInline(lex->currCh) || isNumericInline(lex->currCh) || lex->currCh=='$') {
         jslTokenAppendChar(lex->currCh);
         jslGetNextCh();
       }
       lex->tk = LEX_ID;
+      if (!lex->token[1]) break; // there are no single-character reserved words - skip the check!
       // We do fancy stuff here to reduce number of compares (hopefully GCC creates a jump table)
       switch (lex->token[0]) {
-      case 'b': if (jslIsToken("break", 1)) lex->tk = LEX_R_BREAK;
+      case 'b': jslCheckToken("reak", LEX_R_BREAK);
       break;
-      case 'c': if (jslIsToken("case", 1)) lex->tk = LEX_R_CASE;
-      else if (jslIsToken("catch", 1)) lex->tk = LEX_R_CATCH;
-      else if (jslIsToken("class", 1)) lex->tk = LEX_R_CLASS;
-      else if (jslIsToken("const", 1)) lex->tk = LEX_R_CONST;
-      else if (jslIsToken("continue", 1)) lex->tk = LEX_R_CONTINUE;
+      case 'c': if (!jslCheckToken("ase", LEX_R_CASE))
+                if (!jslCheckToken("atch", LEX_R_CATCH))
+                if (!jslCheckToken("lass", LEX_R_CLASS))
+                if (!jslCheckToken("onst", LEX_R_CONST))
+                jslCheckToken("ontinue", LEX_R_CONTINUE);
       break;
-      case 'd': if (jslIsToken("default", 1)) lex->tk = LEX_R_DEFAULT;
-      else if (jslIsToken("delete", 1)) lex->tk = LEX_R_DELETE;
-      else if (jslIsToken("do", 1)) lex->tk = LEX_R_DO;
-      else if (jslIsToken("debugger", 1)) lex->tk = LEX_R_DEBUGGER;
+      case 'd': if (!jslCheckToken("efault", LEX_R_DEFAULT))
+                if (!jslCheckToken("elete", LEX_R_DELETE))
+                if (!jslCheckToken("o", LEX_R_DO))
+                jslCheckToken("ebugger", LEX_R_DEBUGGER);
       break;
-      case 'e': if (jslIsToken("else", 1)) lex->tk = LEX_R_ELSE;
-      else if (jslIsToken("extends", 1)) lex->tk = LEX_R_EXTENDS;
+      case 'e': if (!jslCheckToken("lse", LEX_R_ELSE))
+                jslCheckToken("xtends", LEX_R_EXTENDS);
       break;
-      case 'f': if (jslIsToken("false", 1)) lex->tk = LEX_R_FALSE;
-      else if (jslIsToken("finally", 1)) lex->tk = LEX_R_FINALLY;
-      else if (jslIsToken("for", 1)) lex->tk = LEX_R_FOR;
-      else if (jslIsToken("function", 1)) lex->tk = LEX_R_FUNCTION;
+      case 'f': if (!jslCheckToken("alse", LEX_R_FALSE))
+                if (!jslCheckToken("inally", LEX_R_FINALLY))
+                if (!jslCheckToken("or", LEX_R_FOR))
+                jslCheckToken("unction", LEX_R_FUNCTION);
       break;
-      case 'i': if (jslIsToken("if", 1)) lex->tk = LEX_R_IF;
-      else if (jslIsToken("in", 1)) lex->tk = LEX_R_IN;
-      else if (jslIsToken("instanceof", 1)) lex->tk = LEX_R_INSTANCEOF;
+      case 'i': if (!jslCheckToken("f", LEX_R_IF))
+                if (!jslCheckToken("n", LEX_R_IN))
+                jslCheckToken("nstanceof", LEX_R_INSTANCEOF);
       break;
-      case 'l': if (jslIsToken("let", 1)) lex->tk = LEX_R_LET;
+      case 'l': jslCheckToken("et", LEX_R_LET);
       break;
-      case 'n': if (jslIsToken("new", 1)) lex->tk = LEX_R_NEW;
-      else if (jslIsToken("null", 1)) lex->tk = LEX_R_NULL;
+      case 'n': if (!jslCheckToken("ew", LEX_R_NEW))
+                jslCheckToken("ull", LEX_R_NULL);
       break;
-      case 'o': if (jslIsToken("of", 1)) lex->tk = LEX_R_OF;
+      case 'o': jslCheckToken("f", LEX_R_OF);
       break;
-      case 'r': if (jslIsToken("return", 1)) lex->tk = LEX_R_RETURN;
+      case 'r': jslCheckToken("eturn", LEX_R_RETURN);
       break;
-      case 's': if (jslIsToken("static", 1)) lex->tk = LEX_R_STATIC;
-      else if (jslIsToken("super", 1)) lex->tk = LEX_R_SUPER;
-      else if (jslIsToken("switch", 1)) lex->tk = LEX_R_SWITCH;
+      case 's': if (!jslCheckToken("tatic", LEX_R_STATIC))
+                if (!jslCheckToken("uper", LEX_R_SUPER))
+                jslCheckToken("witch", LEX_R_SWITCH);
       break;
-      case 't': if (jslIsToken("this", 1)) { lex->tk = LEX_R_THIS; lex->hadThisKeyword=true; }
-      else if (jslIsToken("throw", 1)) lex->tk = LEX_R_THROW;
-      else if (jslIsToken("true", 1)) lex->tk = LEX_R_TRUE;
-      else if (jslIsToken("try", 1)) lex->tk = LEX_R_TRY;
-      else if (jslIsToken("typeof", 1)) lex->tk = LEX_R_TYPEOF;
+      case 't': if (jslCheckToken("his", LEX_R_THIS)) lex->hadThisKeyword=true;
+                else if (!jslCheckToken("hrow", LEX_R_THROW))
+                if (!jslCheckToken("rue", LEX_R_TRUE))
+                if (!jslCheckToken("ry", LEX_R_TRY))
+                     jslCheckToken("ypeof", LEX_R_TYPEOF);
       break;
-      case 'u': if (jslIsToken("undefined", 1)) lex->tk = LEX_R_UNDEFINED;
+      case 'u': jslCheckToken("ndefined", LEX_R_UNDEFINED);
       break;
-      case 'w': if (jslIsToken("while", 1)) lex->tk = LEX_R_WHILE;
+      case 'w': jslCheckToken("hile",LEX_R_WHILE);
       break;
-      case 'v': if (jslIsToken("var", 1)) lex->tk = LEX_R_VAR;
-      else if (jslIsToken("void", 1)) lex->tk = LEX_R_VOID;
+      case 'v': if (!jslCheckToken("ar",LEX_R_VAR))
+                jslCheckToken("oid",LEX_R_VOID);
       break;
       default: break;
       } break;
@@ -522,7 +675,7 @@ void jslGetNextToken() {
         bool canBeFloating = true;
         if (lex->currCh=='.') {
           jslGetNextCh();
-          if (isNumeric(lex->currCh)) {
+          if (isNumericInline(lex->currCh)) {
             // it is a float
             lex->tk = LEX_FLOAT;
             jslTokenAppendChar('.');
@@ -543,7 +696,7 @@ void jslGetNextToken() {
             }
           }
           lex->tk = LEX_INT;
-          while (isNumeric(lex->currCh) || (!canBeFloating && isHexadecimal(lex->currCh)) || lex->currCh=='_') {
+          while (isNumericInline(lex->currCh) || (!canBeFloating && isHexadecimal(lex->currCh)) || lex->currCh=='_') {
             if (lex->currCh != '_') jslTokenAppendChar(lex->currCh);
             jslGetNextCh();
           }
@@ -636,7 +789,8 @@ void jslGetNextToken() {
       case JSLJT_FORWARDSLASH:
       // yay! JS is so awesome.
       if (lastToken==LEX_EOF ||
-          (lastToken>=_LEX_TOKENS_START && lastToken<=_LEX_TOKENS_END) || // any keyword or operator
+          (lastToken>=_LEX_TOKENS_START && lastToken<=_LEX_TOKENS_END && // keyword or operator
+           lastToken!=LEX_R_TRUE && lastToken!=LEX_R_FALSE && lastToken!=LEX_R_NULL && lastToken!=LEX_R_UNDEFINED) || // but not values (#2424)
           lastToken=='!' ||
           lastToken=='%' ||
           lastToken=='&' ||
@@ -923,7 +1077,7 @@ void jslGetTokenString(char *str, size_t len) {
 char *jslGetTokenValueAsString() {
   assert(lex->tokenl < JSLEX_MAX_TOKEN_LENGTH);
   lex->token[lex->tokenl]  = 0; // add final null
-  if (lex->tokenl==0 && lex->tk >= _LEX_R_LIST_START && lex->tk <= _LEX_R_LIST_END) {
+  if (lex->tokenl==0 && LEX_IS_RESERVED_WORD(lex->tk)) {
     // pretokenised - so we'll work out the name from our token name list
     // this isn't fast, but won't be called very often
     jslTokenAsString(lex->tk, lex->token, sizeof(lex->token));
@@ -940,7 +1094,7 @@ int jslGetTokenLength() {
 JsVar *jslGetTokenValueAsVar() {
   if (lex->tokenValue) {
     return jsvLockAgain(lex->tokenValue);
-  } else if (lex->tk >= _LEX_R_LIST_START && lex->tk <= _LEX_R_LIST_END) {
+  } else if (LEX_IS_RESERVED_WORD(lex->tk)) {
     // in pretokenised code, we must make this up
     return jsvNewFromString(jslReservedWordAsString(lex->tk));
   } else {
@@ -952,7 +1106,7 @@ JsVar *jslGetTokenValueAsVar() {
 
 bool jslIsIDOrReservedWord() {
   return lex->tk == LEX_ID ||
-         (lex->tk >= _LEX_R_LIST_START && lex->tk <= _LEX_R_LIST_END);
+         LEX_IS_RESERVED_WORD(lex->tk);
 }
 
 /* Match failed - report error message */
@@ -1101,7 +1255,9 @@ JsVar *jslNewStringFromLexer(JslCharPos *charFrom, size_t charTo) {
   block->varData.str[0] = charFrom->currCh;
   size_t blockChars = 1;
 
-  size_t l = maxLength;
+#ifndef NO_ASSERT
+  size_t totalStringLength = maxLength;
+#endif
   // now start appending
   JsvStringIterator it;
   jsvStringIteratorClone(&it, &charFrom->it);
@@ -1122,7 +1278,7 @@ JsVar *jslNewStringFromLexer(JslCharPos *charFrom, size_t charTo) {
   jsvSetCharactersInVar(block, blockChars);
   jsvUnLock(block);
   // Just make sure we only assert if there's a bug here. If we just ran out of memory or at end of string it's ok
-  assert((l == jsvGetStringLength(var)) || (jsErrorFlags&JSERR_MEMORY) || !jsvStringIteratorHasChar(&it));
+  assert((totalStringLength == jsvGetStringLength(var)) || (jsErrorFlags&JSERR_MEMORY) || !jsvStringIteratorHasChar(&it));
   jsvStringIteratorFree(&it);
 
 
@@ -1164,7 +1320,7 @@ void jslPrintTokenisedString(JsVar *code, vcbprintf_callback user_callback, void
 
 void jslPrintPosition(vcbprintf_callback user_callback, void *user_data, size_t tokenPos) {
   size_t line,col;
-#ifndef SAVE_ON_FLASH
+#if !defined(SAVE_ON_FLASH) && !defined(ESPR_EMBED)
   if (jsvIsNativeString(lex->sourceVar) || jsvIsFlashString(lex->sourceVar)) {
     uint32_t stringAddr = (uint32_t)(size_t)lex->sourceVar->varData.nativeStr.ptr;
     JsfFileHeader header;

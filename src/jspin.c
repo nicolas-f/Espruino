@@ -247,7 +247,7 @@ bool jshPinInput(
     value = jshPinGetValue(pin);
   }
   // Handle pin being invalid.
-  else jsExceptionHere(JSET_ERROR, "Invalid pin!");
+  else jsExceptionHere(JSET_ERROR, "Invalid pin");
   return value;
 }
 
@@ -265,7 +265,7 @@ void jshPinOutput(
       jshPinSetState(pin, JSHPINSTATE_GPIO_OUT);
   }
   // Handle pin being invalid.
-  else jsExceptionHere(JSET_ERROR, "Invalid pin!");
+  else jsExceptionHere(JSET_ERROR, "Invalid pin");
 }
 
 
@@ -471,7 +471,7 @@ JsVar *jshGetDeviceObjectFor(JshPinFunction deviceMin, JshPinFunction deviceMax,
   if (dev==JSH_NOTHING) return 0;
   char devName[16];
   jshPinFunctionToString(dev, JSPFTS_DEVICE|JSPFTS_DEVICE_NUMBER|JSPFTS_JS_NAMES, devName, sizeof(devName));
-  JsVar *devVar = jsvObjectGetChild(execInfo.root, devName, 0);
+  JsVar *devVar = jsvObjectGetChildIfExists(execInfo.root, devName);
   if (devVar) return devVar;
   return jswFindBuiltInFunction(0, devName);
 }

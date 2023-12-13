@@ -59,14 +59,14 @@
     });
     Bangle.setLCDPower(1); // ensure screen is on
   }
-  g.clearRect(Bangle.appRect); // clear screen
+  g.reset().clearRect(Bangle.appRect); // clear screen
   if (!msg) {
     Bangle.setUI(); // remove watches
     return Promise.resolve();
   }
   draw();
   return new Promise(resolve=>{
-    Bangle.setUI("touch", e=>{
+    Bangle.setUI({mode:"custom", remove: options.remove, redraw: draw, back:options.back, touch:(_,e)=>{
       btnPos.forEach((b,i)=>{
         if (e.x > b.x1 && e.x < b.x2 &&
             e.y > b.y1 && e.y < b.y2) {
@@ -76,6 +76,6 @@
           resolve(options.buttons[btns[i]]);
         }
       });
-    });
+    }});
   });
 })

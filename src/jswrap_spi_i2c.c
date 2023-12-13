@@ -99,12 +99,12 @@ Options can contain the following (defaults are shown where relevant):
 
 ```
 {
-  sck:pin, 
-  miso:pin, 
-  mosi:pin, 
+  sck:pin,
+  miso:pin,
+  mosi:pin,
   baud:integer=100000, // ignored on software SPI
   mode:integer=0, // between 0 and 3
-  order:string='msb' // can be 'msb' or 'lsb' 
+  order:string='msb' // can be 'msb' or 'lsb'
   bits:8 // only available for software SPI
 }
 ```
@@ -147,7 +147,7 @@ void jswrap_spi_setup(
     jshSPISetup(device, &inf);
 #ifdef LINUX
     if (jsvIsObject(options)) {
-      jsvObjectSetChildAndUnLock(parent, "path", jsvObjectGetChild(options, "path", 0));
+      jsvObjectSetChildAndUnLock(parent, "path", jsvObjectGetChildIfExists(options, "path"));
     }
 #endif
   } else if (device == EV_NONE) {
@@ -160,10 +160,7 @@ void jswrap_spi_setup(
       jshPinSetState(inf.pinMOSI,  JSHPINSTATE_GPIO_OUT);
   } else return;
   // Set up options, so we can initialise it on startup
-  if (options)
-    jsvUnLock(jsvSetNamedChild(parent, options, DEVICE_OPTIONS_NAME));
-  else
-    jsvObjectRemoveChild(parent, DEVICE_OPTIONS_NAME);
+  jsvObjectSetOrRemoveChild(parent, DEVICE_OPTIONS_NAME, options);
 }
 
 
@@ -579,7 +576,7 @@ The third I2C port
   "name" : "setup",
   "generate" : "jswrap_i2c_setup",
   "params" : [
-    ["options","JsVar",["An optional structure containing extra information on initialising the I2C port","```{scl:pin, sda:pin, bitrate:100000}```","You can find out which pins to use by looking at [your board's reference page](#boards) and searching for pins with the `I2C` marker. Note that 400kHz is the maximum bitrate for most parts."]]
+    ["options","JsVar",["[optional] A structure containing extra information on initialising the I2C port","```{scl:pin, sda:pin, bitrate:100000}```","You can find out which pins to use by looking at [your board's reference page](#boards) and searching for pins with the `I2C` marker. Note that 400kHz is the maximum bitrate for most parts."]]
   ]
 }
 Set up this I2C port
@@ -618,10 +615,7 @@ void jswrap_i2c_setup(JsVar *parent, JsVar *options) {
 #endif
     }
     // Set up options, so we can initialise it on startup
-    if (options)
-      jsvUnLock(jsvSetNamedChild(parent, options, DEVICE_OPTIONS_NAME));
-    else
-      jsvObjectRemoveChild(parent, DEVICE_OPTIONS_NAME);
+    jsvObjectSetOrRemoveChild(parent, DEVICE_OPTIONS_NAME, options);
   }
 }
 
@@ -629,9 +623,9 @@ void jswrap_i2c_setup(JsVar *parent, JsVar *options) {
 static NO_INLINE int i2c_get_address(JsVar *address, bool *sendStop) {
   *sendStop = true;
   if (jsvIsObject(address)) {
-    JsVar *stopVar = jsvObjectGetChild(address, "stop", 0);
+    JsVar *stopVar = jsvObjectGetChildIfExists(address, "stop");
     if (stopVar) *sendStop = jsvGetBoolAndUnLock(stopVar);
-    return jsvGetIntegerAndUnLock(jsvObjectGetChild(address, "address", 0));
+    return jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(address, "address"));
   } else
     return jsvGetInteger(address);
 }
@@ -667,9 +661,9 @@ void jswrap_i2c_writeTo(JsVar *parent, JsVar *addressVar, JsVar *args) {
 #ifndef SAVE_ON_FLASH
       // software
       JshI2CInfo inf;
-      JsVar *options = jsvObjectGetChild(parent, DEVICE_OPTIONS_NAME, 0);
+      JsVar *options = jsvObjectGetChildIfExists(parent, DEVICE_OPTIONS_NAME);
       if (jsi2cPopulateI2CInfo(&inf, options)) {
-        inf.started = jsvGetBoolAndUnLock(jsvObjectGetChild(parent, "started", 0));
+        inf.started = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(parent, "started"));
         jsi2cWrite(&inf, (unsigned char)address, (int)dataLen, (unsigned char*)dataPtr, sendStop);
       }
       jsvUnLock2(jsvObjectSetChild(parent, "started", jsvNewFromBool(inf.started)), options);
@@ -704,7 +698,7 @@ JsVar *jswrap_i2c_readFrom(JsVar *parent, JsVar *addressVar, int nBytes) {
   if (nBytes<=0)
     return 0;
   if ((unsigned int)nBytes+256 > jsuGetFreeStack()) {
-    jsExceptionHere(JSET_ERROR, "Not enough free stack to receive this amount of data");
+    jsExceptionHere(JSET_ERROR, "Not enough stack memory for data");
     return 0;
   }
   unsigned char *buf = (unsigned char *)alloca((size_t)nBytes);
@@ -715,9 +709,9 @@ JsVar *jswrap_i2c_readFrom(JsVar *parent, JsVar *addressVar, int nBytes) {
 #ifndef SAVE_ON_FLASH
     // software
     JshI2CInfo inf;
-    JsVar *options = jsvObjectGetChild(parent, DEVICE_OPTIONS_NAME, 0);
+    JsVar *options = jsvObjectGetChildIfExists(parent, DEVICE_OPTIONS_NAME);
     if (jsi2cPopulateI2CInfo(&inf, options)) {
-      inf.started = jsvGetBoolAndUnLock(jsvObjectGetChild(parent, "started", 0));
+      inf.started = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(parent, "started"));
       jsi2cRead(&inf, (unsigned char)address, nBytes, buf, sendStop);
     }
     jsvUnLock2(jsvObjectSetChild(parent, "started", jsvNewFromBool(inf.started)), options);

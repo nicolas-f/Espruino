@@ -14,32 +14,33 @@ Works:
 * `for (;;)` loops
 * `if ()`
 * `i++` / `++i`
+* `i+=`
+* ternary operators
 * `~i`/`!i`/`+i`/`-i`
+* Function arguments
+* `var/const/let` (`const`/`let` scoping does not work at the moment)
 * On the whole functions that can't be JITed will produce a message on the console and will be treated as normal functions.
+* Short-circuit execution (`&&`/`||`)
+* Array `[]` and Object `{}` declarations
 
 Doesn't work:
 
 * Everything else
-* Function arguments
-* `var/const/let`
 
 Performance:
 
-* Right now, variable accesses search for the variable each time - so this is pretty slow. 
-  * Maybe they could all be referenced at the start just once and stored on the stack? This could be an easy shortcut to get fast local vars too.
-  * If we did this we'd need to do a first pass, but the first pass *could* be used as quick way to see if the code was JITable
-  * We can't allocate them as we go because we have flow control though.
-  * We also have to worry about unlocking them all on exit if we reference them at the start
-  * We could also extend it to allow caching of constant field access, for instance 'console.log'
+* When calling a JIT function, we use existing FunctionCall code to set up args and an execution scope (so args can be passed in)
+* Variables are referenced at the start just once and stored on the stack
+  * We could also maybe extend it to allow caching of constant field access, for instance 'console.log'
 * Built-in functions could be called directly, which would be a TON faster
 * Peephole optimisation could still be added (eg. removing `push r0, pop r0`) but this is the least of our worries
 * Stuff is in place to allow ints to be stored on the stack and converted when needed. This could maybe allow us to keep some vars as ints.
-* When a function is called we load up the address as a 32 bit literal each time. We could maybe have a constant pool?
+* When a function is called we load up the address as a 32 bit literal each time. We could maybe have a constant pool or local stub functions?
 * When we emit code, we just use StringAppend which can be very slow. We should use an iterator (it's an easy win for compile performance)
 
-Big stuff to do:
+Possible improvements:
 
-* When calling a JIT function, using existing FunctionCall code to set up args and an execution scope (so args can be passed in)
+* We always output a `return undefined` even if the function has already returned
 
 
 ## Testing
@@ -81,6 +82,7 @@ The Pi can execute Thumb-2 code (Pi 3 and on only)
 ### Build for an actual device
 
 * Build for ARM: `USE_JIT=1 BOARD=BOARD_NAME RELEASE=1 make flash`
+* You can also add `CFLAGS+=-DDEBUG_JIT_CALLS=1` to ensure that function names are included in debug info even for a release build
 
 
 ```
@@ -104,18 +106,16 @@ var test = "Hello world";
 function jit() {'jit';return test;}
 jit()=="Hello world";
 
-var test = "Hello ";
-var jit = E.nativeCall(1, "JsVar()", E.JIT("test+'World!'"))
-jit()=="Hello World!"
-
 function t() { print("Hello"); }
 function jit() {'jit';t();}
 jit(); // prints 'hello'
 
 function jit() {'jit';print(42);}
+jit(); // prints 42
+
 
 function jit() {'jit';print(42);return 123;}
-jit()==123
+jit()==123 // prints 42, returns 123
 
 function jit() {'jit';return !123;}
 jit()==false
@@ -125,8 +125,13 @@ function jit() {'jit';return ~0;}
 jit()==-1
 function jit() {'jit';return -(1);}
 jit()==-1
-function jit() {'jit';return +"0123";} 
+function jit() {'jit';return +"0123";}
 jit()==83 // octal!
+
+E.setFlags({jitDebug:1});
+function jit(a) {'jit';return a?5:10;}
+jit(1)==5
+jit(0)==10
 
 function t() { return "Hello"; }
 function jit() {'jit'; return t()+" world";}
@@ -142,6 +147,12 @@ i=0;jit()==0 && i==1
 function jit() {'jit';return ++i;}
 i=0;jit()==1 && i==1
 
+function jit() {'jit';return i+=" world";}
+i="hello";jit()=="hello world" && i=="hello world";
+
+function jit() {'jit';return i-=2;}
+i=3;jit()==1 && i==1
+
 function jit() {'jit';i=42;}
 jit();i==42
 
@@ -156,16 +167,32 @@ i=5;jit(); // prints X,--
 function jit() {"jit";for (i=0;i<5;i=i+1) print(i);}
 jit(); // prints 0,1,2,3,4
 
-function jit() {"jit";for (i=0;i<5;i++) print(i);} // BROKEN?  Uncaught ReferenceError: "" is not defined
+function jit() {"jit";for (i=0;i<5;i++) print(i);}
 jit(); // prints 0,1,2,3,4
 
-function jit() {"jit";for (i=0;i<5;++i) print(i);}
+function jit() {"jit";for (var i=0;i<5;++i) print(i);}
 jit(); // prints 0,1,2,3,4
 
+function jit() {"jit";while (0) {}}
+jit();
+function jit() {"jit";while (1) return 42;}
+jit()==42
+function jit() {"jit";while (0) return 0;return 42;}
+jit()==42
+
+function jit(i) {"jit";while (i--) print(i);}
+jit(5) // prints 4,3,2,1,0
+
+function jit() {"jit";while (i--) j++;}
+i=1;j=0;jit();  // ok, does nothing
+function jit() {"jit";while (0) print(5); print("Done"); } jit(); // prints 'Done'
+
+function jit() {"jit";do { print(i); } while (i--);}
+i=5;jit(); // prints 5,4,3,2,1,0
 
 function nojit() {for (i=0;i<1000;i=i+1);}
 function jit() {"jit";for (i=0;i<1000;i=i+1);}
-t=getTime();jit();getTime()-t // 0.14 sec
+t=getTime();jit();getTime()-t // 0.11 sec
 t=getTime();nojit();getTime()-t // 0.28 sec
 
 
@@ -176,6 +203,58 @@ function jit() {"jit";return a["b"];}
 jit()==42
 function jit() {"jit";a.c();}
 jit(); // prints 'hello {b:42,...}'
+
+a=Uint8Array([42])
+function jit(){"jit";var i=0;return a[i];}
+jit()==42
+
+function jit(a,b) {'jit';return a+"Hello world"+b;}
+jit(1,2)=="1Hello world2"
+
+function jit() {'jit';return [1,2,1+2,"Hello","World"];}
+jit()=="1,2,3,Hello,World"
+
+function jit() {'jit';return {a:42,b:10,12:5};}
+JSON.stringify(jit()) == '{"a":42,"b":10,"12":5}'
+
+E.setFlags({jitDebug:1});
+function jit() {'jit';return 0&&2;}
+jit()==0
+function jit() {'jit';return 3&&2;}
+jit()==2
+function jit() {'jit';return 0||2;}
+jit()==2
+function jit() {'jit';return 3||2;}
+jit()==3
+
+
+jit = {a:42, jit:function(){'jit';return this.a;}}
+jit.jit()==42
+
+function nojit() {
+  for (var i=0;i<10000;i++) {
+    digitalWrite(LED,1);
+    digitalWrite(LED,0);
+  }
+}
+function jit() {"jit";
+  for (var i=0;i<10000;i++) {
+    digitalWrite(LED,1);
+    digitalWrite(LED,0);
+  }
+}
+t=getTime();nojit();getTime()-t // 6.96
+t=getTime();jit();getTime()-t   // 2.02
+
+
+t=getTime();function jit() {"jit";
+  for (var i=0;i<10;i++) {
+    print("Start");
+    digitalWrite(LED,1);
+    digitalWrite(LED,0);
+    print("Stop");
+  }
+};print("JIT compile time", getTime()-t,"s")
 ```
 
 Run JIT on ARM and then disassemble:
@@ -184,10 +263,26 @@ Run JIT on ARM and then disassemble:
 // on ARM
 function jit() {"jit";return 1;}
 print(btoa(jit["\xffcod"]))
+// prints ASBL8Kz7AbQBvHBH
 
 // On Linux
 echo ASBL8Kz7AbQBvHBH | base64 -d  > jit.bin
 arm-none-eabi-objdump -D -Mforce-thumb -b binary -m cortex-m4 jit.bin
+```
+
+Seeing what GCC does:
+
+```
+// test.c
+void main() {
+  int data[400];
+  volatile int x = data[1];
+}
+```
+
+```
+arm-none-eabi-gcc -Os -mcpu=cortex-m4 -mthumb -mabi=aapcs -mfloat-abi=hard -mfpu=fpv4-sp-d16 -nostartfiles test.c
+arm-none-eabi-objdump -D -Mforce-thumb -m cortex-m4 a.out
 ```
 
 ## Useful links

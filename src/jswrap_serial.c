@@ -228,7 +228,7 @@ void jswrap_serial_setConsole(JsVar *parent, bool force) {
   "generate" : "jswrap_serial_setup",
   "params" : [
     ["baudrate","JsVar","The baud rate - the default is 9600"],
-    ["options","JsVar","An optional structure containing extra information on initialising the serial port - see below."]
+    ["options","JsVar","[optional] A structure containing extra information on initialising the serial port - see below."]
   ]
 }
 Setup this Serial port with the given baud rate and options.
@@ -248,7 +248,7 @@ The second argument can contain:
   ck:pin,                           // (default none) Clock Pin
   cts:pin,                          // (default none) Clear to Send Pin
   bytesize:8,                       // (default 8)How many data bits - 7 or 8
-  parity:null/'none'/'o'/'odd'/'e'/'even', 
+  parity:null/'none'/'o'/'odd'/'e'/'even',
                                     // (default none) Parity bit
   stopbits:1,                       // (default 1) Number of stop bits to use
   flow:null/undefined/'none'/'xon', // (default none) software flow control
@@ -299,14 +299,14 @@ void jswrap_serial_setup(JsVar *parent, JsVar *baud, JsVar *options) {
   JshUSARTInfo inf;
 
   if (jsvIsUndefined(options)) {
-    options = jsvObjectGetChild(parent, DEVICE_OPTIONS_NAME, 0);
+    options = jsvObjectGetChildIfExists(parent, DEVICE_OPTIONS_NAME);
   } else
     jsvLockAgain(options);
 
   bool ok = jsserialPopulateUSARTInfo(&inf, baud, options);
 #ifdef LINUX
   if (ok && jsvIsObject(options))
-    jsvObjectSetChildAndUnLock(parent, "path", jsvObjectGetChild(options, "path", 0));
+    jsvObjectSetChildAndUnLock(parent, "path", jsvObjectGetChildIfExists(options, "path"));
 #endif
 
   if (!ok) {
@@ -327,7 +327,7 @@ void jswrap_serial_setup(JsVar *parent, JsVar *baud, JsVar *options) {
     if (DEVICE_IS_USART(device))
       jshUSARTSetup(device, &inf);
   } else if (device == EV_NONE) {
-#ifndef SAVE_ON_FLASH
+#ifndef ESPR_NO_SOFTWARE_SERIAL
     // Software
     if (inf.pinTX != PIN_UNDEFINED) {
       jshPinSetState(inf.pinTX,  JSHPINSTATE_GPIO_OUT);
@@ -338,9 +338,9 @@ void jswrap_serial_setup(JsVar *parent, JsVar *baud, JsVar *options) {
       jsserialEventCallbackInit(parent, &inf);
     }
     if (inf.pinCK != PIN_UNDEFINED)
-      jsExceptionHere(JSET_ERROR, "Software Serial CK not implemented yet\n");
+      jsExceptionHere(JSET_ERROR, "Software Serial CK not implemented yet");
 #else
-    jsExceptionHere(JSET_ERROR, "No Software Serial in this build\n");
+    jsExceptionHere(JSET_ERROR, "No Software Serial in this build");
 #endif
   }
 }
@@ -360,8 +360,8 @@ void jswrap_serial_unsetup(JsVar *parent) {
   IOEventFlags device = jsiGetDeviceFromClass(parent);
 
   // Populate JshUSARTInfo from serial - if it exists
-  JsVar *options = jsvObjectGetChild(parent, DEVICE_OPTIONS_NAME, 0);
-  JsVar *baud = jsvObjectGetChild(parent, USART_BAUDRATE_NAME, 0);
+  JsVar *options = jsvObjectGetChildIfExists(parent, DEVICE_OPTIONS_NAME);
+  JsVar *baud = jsvObjectGetChildIfExists(parent, USART_BAUDRATE_NAME);
   if (options) {
     JshUSARTInfo inf;
     jsserialPopulateUSARTInfo(&inf, baud, options);
@@ -370,9 +370,11 @@ void jswrap_serial_unsetup(JsVar *parent) {
     if (inf.pinCTS!=PIN_UNDEFINED) jshPinSetState(inf.pinCTS, JSHPINSTATE_UNDEFINED);
     if (inf.pinRX!=PIN_UNDEFINED) jshPinSetState(inf.pinRX, JSHPINSTATE_UNDEFINED);
     if (inf.pinTX!=PIN_UNDEFINED) jshPinSetState(inf.pinTX, JSHPINSTATE_UNDEFINED);
+#ifndef ESPR_NO_SOFTWARE_SERIAL
     if (!DEVICE_IS_SERIAL(device))
       // It's software. Only thing we care about is RX as that uses watches
       jsserialEventCallbackKill(parent, &inf);
+#endif
   }
   jsvUnLock2(options, baud);
   // Remove stored settings
@@ -393,7 +395,7 @@ void jswrap_serial_unsetup(JsVar *parent) {
   "generate" : "jswrap_serial_idle"
 }*/
 bool jswrap_serial_idle() {
-#ifndef SAVE_ON_FLASH
+#ifndef ESPR_NO_SOFTWARE_SERIAL
   return jsserialEventCallbackIdle();
 #else
   return false;
@@ -533,8 +535,25 @@ Return a string containing characters that have been received
   "generate" : "jswrap_pipe",
   "params" : [
     ["destination","JsVar","The destination file/stream that will receive content from the source."],
-    ["options","JsVar",["An optional object `{ chunkSize : int=32, end : bool=true, complete : function }`","chunkSize : The amount of data to pipe from source to destination at a time","complete : a function to call when the pipe activity is complete","end : call the 'end' function on the destination when the source is finished"]]
-  ]
+    ["options","JsVar",["[optional] An object `{ chunkSize : int=32, end : bool=true, complete : function }`","chunkSize : The amount of data to pipe from source to destination at a time","complete : a function to call when the pipe activity is complete","end : call the 'end' function on the destination when the source is finished"]]
+  ],
+  "typescript": "pipe(destination: any, options?: PipeOptions): void"
 }
 Pipe this USART to a stream (an object with a 'write' method)
  */
+
+
+/*JSON{
+  "type" : "method",
+  "class" : "Serial",
+  "name" : "flush",
+  "ifndef" : "SAVE_ON_FLASH",
+  "generate" : "jswrap_serial_flush"
+}
+Flush this serial stream (pause execution until all data has been sent)
+ */
+void jswrap_serial_flush(JsVar *parent) {
+  IOEventFlags device = jsiGetDeviceFromClass(parent);
+  if (device == EV_NONE) return;
+  jshTransmitFlushDevice(device);
+}

@@ -85,6 +85,9 @@ typedef enum {
   EV_BLUETOOTH_PENDING,      // Tasks that came from the Bluetooth Stack in an IRQ
   EV_BLUETOOTH_PENDING_DATA, // Data for pending tasks - this comes after the EV_BLUETOOTH_PENDING task itself
 #endif
+#ifdef BANGLEJS
+  EV_BANGLEJS,               // sent whenever Bangle.js-specific data needs to be queued
+#endif
 #if SPI_COUNT>=1
   EV_SPI1, ///< SPI Devices
 #endif
@@ -217,6 +220,8 @@ void jshTransmit(IOEventFlags device, unsigned char data);
 void jshTransmitPrintf(IOEventFlags device, const char *fmt, ...);
 /// Wait for transmit to finish
 void jshTransmitFlush();
+/// Wait for all data in the transmit queue to be written for a specific device
+void jshTransmitFlushDevice(IOEventFlags device);
 /// Clear everything from a device
 void jshTransmitClearDevice(IOEventFlags device);
 /// Move all output from one device to another
@@ -254,6 +259,6 @@ Pin jshGetEventDataPin(IOEventFlags channel);
 void jshSetErrorHandlingEnabled(IOEventFlags device, bool errorHandling);
 
 /// Get whether a Serial device puts framing/parity errors into the input queue
-bool jshGetErrorHandlingEnabled(IOEventFlags device); 
+bool jshGetErrorHandlingEnabled(IOEventFlags device);
 
 #endif /* JSDEVICES_H_ */

@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/bin/env python2.7
 
 # This file is part of Espruino, a JavaScript interpreter for Microcontrollers
 #
@@ -73,7 +73,9 @@ if os.path.isfile(mdnURLFile):
 
 # start writing
 htmlFile = open('functions.html', 'w')
-def html(s): htmlFile.write(s+"\n");
+def html(s):
+  print(s);
+  htmlFile.write(s.encode('utf-8')+"\n");
 
 def htmlify(d,current):
   d = markdown.markdown(d, extensions=['mdx_urlize'], tab_length=2)

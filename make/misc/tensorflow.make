@@ -1,4 +1,4 @@
-TENSOR_ROOT := $(ROOT)/libs/tensorflow
+TENSOR_ROOT := libs/tensorflow
 CCSOURCES += \
 $(TENSOR_ROOT)/tensorflow/lite/micro/simple_memory_allocator.cc \
 $(TENSOR_ROOT)/tensorflow/lite/micro/memory_helpers.cc \
@@ -69,5 +69,9 @@ INCLUDE += \
 -I$(TENSOR_ROOT)/third_party/flatbuffers/include \
 -I$(TENSOR_ROOT)/third_party/ruy
 
-CCFLAGS += -DNDEBUG -g -DTF_LITE_STATIC_MEMORY --std=c++11 -g -fno-rtti -fpermissive -Wno-sign-compare -Wno-conversion -Wno-sign-conversion -Wno-missing-field-initializers -Wno-type-limits -Wno-unused-parameter -Wno-unused-variable
+ifdef RELEASE
+CCFLAGS += -DNDEBUG
+# to strip all error messages add -DTF_LITE_STRIP_ERROR_STRINGS
+endif
+CCFLAGS += -fmacro-prefix-map=$(TENSOR_ROOT)/= -g -DTF_LITE_STATIC_MEMORY --std=c++11 -g -fno-rtti -fpermissive -Wno-sign-compare -Wno-conversion -Wno-sign-conversion -Wno-missing-field-initializers -Wno-type-limits -Wno-unused-parameter -Wno-unused-variable
 DEFINES += -DUSE_TENSORFLOW=1

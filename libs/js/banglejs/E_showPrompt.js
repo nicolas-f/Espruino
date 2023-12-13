@@ -25,7 +25,7 @@
     g.setColor(g.theme.fg).setBgColor(g.theme.bg).
       drawString(msgLines.join("\n"),W/2,y);
     y += msgLines.length*FH+32;
-    
+
     var buttonWidths = 0;
     var buttonPadding = 16;
     g.setFontAlign(0,0);
@@ -39,7 +39,7 @@
     btns.forEach((btn,idx)=>{
       btn = loc.translate(btn);
       var w = g.stringWidth(btn);
-      x += (buttonPadding+w)/2;      
+      x += (buttonPadding+w)/2;
       var bw = 2+w/2;
       var poly = [x-bw,y-12,
                   x+bw,y-12,
@@ -55,14 +55,14 @@
     });
     Bangle.setLCDPower(1); // ensure screen is on
   }
-  g.clearRect(Bangle.appRect); // clear screen
+  g.reset().clearRect(Bangle.appRect); // clear screen
   if (!msg) {
     Bangle.setUI(); // remove watches
     return Promise.resolve();
   }
   draw();
   return new Promise(resolve=>{
-    Bangle.setUI("leftright", dir=>{
+    Bangle.setUI({mode: "leftright", remove: options.remove, redraw:draw, back:options.back}, dir=>{
       if (dir<0) {
         if (options.selected>0) {
           options.selected--;
@@ -71,7 +71,7 @@
       } else if (dir>0) {
         if (options.selected<btns.length-1) {
           options.selected++;
-          draw(); 
+          draw();
         }
       } else {
         E.showPrompt(); // remove

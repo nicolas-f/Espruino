@@ -237,12 +237,12 @@ Arrays of this type include all the methods from
 Create an Array Buffer object
  */
 JsVar *jswrap_arraybuffer_constructor(JsVarInt byteLength) {
-  if (byteLength < 0 || byteLength>65535) {
-    jsExceptionHere(JSET_ERROR, "Invalid length for ArrayBuffer\n");
+  if (byteLength < 0) {
+    jsExceptionHere(JSET_ERROR, "Invalid length for ArrayBuffer");
     return 0;
   }
   if (byteLength > JSV_ARRAYBUFFER_MAX_LENGTH) {
-    jsExceptionHere(JSET_ERROR, "ArrayBuffer too long\n");
+    jsExceptionHere(JSET_ERROR, "ArrayBuffer too long");
     return 0;
   }
   // try and use a flat string - which will be faster
@@ -497,7 +497,7 @@ rather than referenced.
   "generate_full" : "jswrap_typedarray_constructor(ARRAYBUFFERVIEW_FLOAT64, arr, byteOffset, length)",
   "params" : [
     ["arr","JsVar","The array or typed array to base this off, or an integer which is the array length"],
-    ["byteOffset","int","The byte offset in the ArrayBuffer  (ONLY IF the first argument was an ArrayBuffer)"],
+    ["byteOffset","int","The byte offset in the ArrayBuffer  (ONLY IF the first argument was an ArrayBuffer). Maximum 65535. "],
     ["length","int","The length (ONLY IF the first argument was an ArrayBuffer)"]
   ],
   "return" : ["JsVar","A typed array"],
@@ -518,6 +518,10 @@ JsVar *jswrap_typedarray_constructor(JsVarDataArrayBufferViewType type, JsVar *a
   JsVar *arrayBuffer = 0;
   // Only allow use of byteOffset/length if we're passing an ArrayBuffer - NOT A VIEW.
   bool copyData = false;
+  if (byteOffset < 0 || byteOffset > 65535) {
+    jsExceptionHere(JSET_ERROR, "byteOffset too large (or negative)");
+    return 0;
+  }
   if (jsvIsArrayBuffer(arr) && arr->varData.arraybuffer.type==ARRAYBUFFERVIEW_ARRAYBUFFER) {
     arrayBuffer = jsvLockAgain(arr);
   } else if (jsvIsNumeric(arr)) {
@@ -529,20 +533,20 @@ JsVar *jswrap_typedarray_constructor(JsVarDataArrayBufferViewType type, JsVar *a
     byteOffset = 0;
     arrayBuffer = jswrap_arraybuffer_constructor((int)JSV_ARRAYBUFFER_GET_SIZE(type)*length);
     copyData = true; // so later on we'll populate this
-  }
+  } // else what?
   if (!arrayBuffer) {
-    jsExceptionHere(JSET_ERROR, "Unsupported first argument of type %t\n", arr);
+    jsExceptionHere(JSET_ERROR, "Unsupported first argument of type %t", arr);
     return 0;
   }
   if (length==0) {
-    length = ((JsVarInt)jsvGetArrayBufferLength(arrayBuffer)-byteOffset) / (JsVarInt)JSV_ARRAYBUFFER_GET_SIZE(type); 
+    length = ((JsVarInt)jsvGetArrayBufferLength(arrayBuffer)-byteOffset) / (JsVarInt)JSV_ARRAYBUFFER_GET_SIZE(type);
     if (length<0) length=0;
   }
   JsVar *typedArr = jsvNewWithFlags(JSV_ARRAYBUFFER);
   if (typedArr) {
     typedArr->varData.arraybuffer.type = type;
     typedArr->varData.arraybuffer.byteOffset = (unsigned short)byteOffset;
-    typedArr->varData.arraybuffer.length = (unsigned short)length;
+    typedArr->varData.arraybuffer.length = (JsVarArrayBufferLength)length;
     jsvSetFirstChild(typedArr, jsvGetRef(jsvRef(arrayBuffer)));
 
     if (copyData) {
@@ -608,7 +612,7 @@ The offset, in bytes, to the first byte of the view within the backing
   "generate" : "jswrap_arraybufferview_set",
   "params" : [
     ["arr","JsVar","Floating point index to access"],
-    ["offset","int32","The offset in this array at which to write the values (optional)"]
+    ["offset","int32","[optional] The offset in this array at which to write the values"]
   ],
   "typescript" : "set(arr: ArrayLike<number>, offset: number): void"
 }
@@ -616,7 +620,7 @@ Copy the contents of `array` into this one, mapping `this[x+offset]=array[x];`
  */
 void jswrap_arraybufferview_set(JsVar *parent, JsVar *arr, int offset) {
   if (!(jsvIsString(arr) || jsvIsArray(arr) || jsvIsArrayBuffer(arr))) {
-    jsExceptionHere(JSET_ERROR, "Expecting first argument to be an array, not %t", arr);
+    jsExceptionHere(JSET_ERROR, "First argument must be Array, not %t", arr);
     return;
   }
   // Copy with the case where we copy from one arraybuffer to another but they use the
@@ -670,7 +674,7 @@ void jswrap_arraybufferview_set(JsVar *parent, JsVar *arr, int offset) {
   "generate" : "jswrap_arraybufferview_map",
   "params" : [
     ["function","JsVar","Function used to map one item to another"],
-    ["thisArg","JsVar","if specified, the function is called with 'this' set to thisArg (optional)"]
+    ["thisArg","JsVar","[optional] If specified, the function is called with 'this' set to thisArg"]
   ],
   "return" : ["JsVar","An array containing the results"],
   "return_object" : "ArrayBufferView",
@@ -684,15 +688,15 @@ Return an array which is made from the following: ```A.map(function) =
  */
 JsVar *jswrap_arraybufferview_map(JsVar *parent, JsVar *funcVar, JsVar *thisVar) {
   if (!jsvIsArrayBuffer(parent)) {
-    jsExceptionHere(JSET_ERROR, "ArrayBufferView.map can only be called on an ArrayBufferView");
+    jsExceptionHere(JSET_ERROR, "Can only be called on an ArrayBufferView");
     return 0;
   }
   if (!jsvIsFunction(funcVar)) {
-    jsExceptionHere(JSET_ERROR, "ArrayBufferView.map's first argument should be a function");
+    jsExceptionHere(JSET_ERROR, "First argument must be a function");
     return 0;
   }
   if (!jsvIsUndefined(thisVar) && !jsvIsObject(thisVar)) {
-    jsExceptionHere(JSET_ERROR, "ArrayBufferView.map's second argument should be undefined, or an object");
+    jsExceptionHere(JSET_ERROR, "Second argument must be Object or undefined");
     return 0;
   }
 
@@ -793,7 +797,7 @@ JsVar *jswrap_arraybufferview_subarray(JsVar *parent, JsVarInt begin, JsVar *end
   "generate" : "jswrap_array_indexOf",
   "params" : [
     ["value","JsVar","The value to check for"],
-    ["startIndex","int","(optional) the index to search from, or 0 if not specified"]
+    ["startIndex","int","[optional] the index to search from, or 0 if not specified"]
   ],
   "return" : ["JsVar","the index of the value in the array, or -1"],
   "typescript" : "indexOf(value: number, startIndex?: number): number;"
@@ -808,7 +812,7 @@ Return the index of the value in the array, or `-1`
   "generate" : "jswrap_array_includes",
   "params" : [
     ["value","JsVar","The value to check for"],
-    ["startIndex","int","(optional) the index to search from, or 0 if not specified"]
+    ["startIndex","int","[optional] the index to search from, or 0 if not specified"]
   ],
   "return" : ["bool","`true` if the array includes the value, `false` otherwise"],
   "typescript" : "includes(value: number, startIndex?: number): boolean;"
@@ -875,7 +879,7 @@ JsVar *jswrap_arraybufferview_sort(JsVar *array, JsVar *compareFn) {
   "generate" : "jswrap_array_forEach",
   "params" : [
     ["function","JsVar","Function to be executed"],
-    ["thisArg","JsVar","if specified, the function is called with 'this' set to thisArg (optional)"]
+    ["thisArg","JsVar","[optional] If specified, the function is called with 'this' set to thisArg"]
   ],
   "typescript" : "forEach(callbackfn: (value: number, index: number, array: T) => void, thisArg?: any): void;"
 }
@@ -923,7 +927,7 @@ Fill this array with the given value, for every index `>= start` and `< end`
   "generate" : "jswrap_array_filter",
   "params" : [
     ["function","JsVar","Function to be executed"],
-    ["thisArg","JsVar","if specified, the function is called with 'this' set to thisArg (optional)"]
+    ["thisArg","JsVar","[optional] If specified, the function is called with 'this' set to thisArg"]
   ],
   "return" : ["JsVar","An array containing the results"],
   "typescript" : "filter(predicate: (value: number, index: number, array: T) => any, thisArg?: any): T;"
@@ -981,7 +985,7 @@ Reverse the contents of this `ArrayBufferView` in-place
   "generate" : "jswrap_array_slice",
   "params" : [
     ["start","int","Start index"],
-    ["end","JsVar","End index (optional)"]
+    ["end","JsVar","[optional] End index"]
   ],
   "return" : ["JsVar","A new array"],
   "return_object" : "Array",

@@ -112,7 +112,7 @@ This is a partial list of definitions that can be added in a `BOARD.py` file's `
 
 * `SAVE_ON_FLASH` - Remove some features (like any ES6 support) to target devices with ~128kB Flash
 * `SAVE_ON_FLASH_EXTREME` - Pull out as many features as possible to target devices with ~128kB Flash that also want things like Filesystem support
-* `BLUETOOTH_NAME_PREFIX="..."` - Make the Bluetooth LE device's name `BLUETOOTH_NAME_PREFIX` followed by the last 2 bytes of the MAC address.
+* `BLUETOOTH_NAME_PREFIX="..."` - NRF52 only: Make the Bluetooth LE device's name `BLUETOOTH_NAME_PREFIX` followed by the last 2 bytes of the MAC address.
 * `BLUETOOTH_ADVERTISING_INTERVAL=375` - set the default Bluetooth advertising interval (default 375)
 * `NFC_DEFAULT_URL="http://foo"` - If defined, set the advertised NFC URL to the one given, plus `?a=ble_address`. Only do it for a fresh boot - not when code has been saved.
 * `PIN_NAMES_DIRECT=1` - Package skips out some pins (maybe there's `D0`,`D1`,`D3` but no `D2`), so the code must search rather than just offsetting based on pin number.
@@ -130,11 +130,22 @@ This is a partial list of definitions that can be added in a `BOARD.py` file's `
 * `USE_TAB_COMPLETE=0` - Don't include tab completion (default is yes unless SAVE_ON_FLASH is defined)
 * `USE_DEBUGGER=0` - Don't include the debugger (default is yes unless SAVE_ON_FLASH is defined)
 * `USE_NETWORK_JS=0` - Don't include JS networking lib used for handling AT commands (default is yes if networking is enabled)
-* `ESPR_DCDC_ENABLE` - On NRF52 use the built-in DCDC converter (requires external hardware)
+* `ESPR_DCDC_ENABLE=1` - On NRF52 use the built-in DCDC converter (requires external hardware)
+* `ESPR_DCDC_HV_ENABLE=1` - On NRF52840 use the built-in high-voltage (REG0) DCDC converter (requires external hardware)
+* `ESPR_REGOUT0_1_8V=1` - On NRF52830/40 set the REG0 VCC voltage to 1.8v (the default is 3.3v)
 * `ESPR_LSE_ENABLE` - On NRF52 use an external 32kHz Low Speed External crystal on D0/D1
 * `ESPR_NO_LOADING_SCREEN` - Bangle.js, don't show a 'loading' screen when loading a new app
 * `ESPR_BOOTLOADER_SPIFLASH` - Allow bootloader to flash direct from a file in SPI flash storage
 * `ESPR_BANGLE_UNISTROKE` - Build in 'unistroke' touch gesture recognition
+* `ESPR_UNICODE_SUPPORT` - Build with support for Unicode Strings
+* `SPIFLASH_SLEEP_CMD` - Set if SPI flash needs to be explicitly slept and woken up
+* `SPIFLASH_READ2X` - Enable 2x speed reads of external flash (using MOSI+MOSI as inputs)
+* `ESPR_JSVAR_FLASH_BUFFER_SIZE=32` - The buffer size in bytes we use when executing/iterating over data in external flash memory (default 16). Should be set based on benchmarks.
+* `ESPR_PBF_FONTS` - Enable support for loading and displaying Pebble-style PBF font files with `g.setFontPBF`
+* `ESPR_BLUETOOTH_ANCS` - Enable Apple ANCS(notification), AMS and CTS support
+* `ESPR_NO_SOFTWARE_SERIAL` - don't build in software serial support
+* `ESPR_NO_SOFTWARE_I2C` - don't build in software I2C support
+* `ESPR_NO_BLUETOOTH_MESSAGES` - don't include text versions of Bluetooth error messages (just the error number)
 
 These are set automatically when `SAVE_ON_FLASH` is set (see `jsutils.h`)
 
@@ -144,6 +155,7 @@ These are set automatically when `SAVE_ON_FLASH` is set (see `jsutils.h`)
 * `ESPR_NO_PROPERTY_SHORTHAND` - No property shorthand in objects like `{a}`
 * `ESPR_NO_LINE_NUMBERS` - disable storing and reporting of Line Numbers. Usually these take 1 var per function, but if we're executing a function from flash we can just work it out from the file when needed
 * `ESPR_NO_LET_SCOPING` - don't create scopes for `let` (treat it like `var`, which was the 2v13 and earlier behaviour)
+* `ESPR_NO_PROMISES` - Don't include promise-handling functions
 
 
 ### chip

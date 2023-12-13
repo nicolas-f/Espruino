@@ -194,7 +194,7 @@ bool run_test(const char *filename) {
   while (isRunning && (jsiHasTimers() || isBusy))
     isBusy = jsiLoop();
 
-  JsVar *result = jsvObjectGetChild(execInfo.root, "result", 0 /*no create*/);
+  JsVar *result = jsvObjectGetChildIfExists(execInfo.root, "result");
   bool pass = jsvGetBool(result);
   jsvUnLock(result);
 
@@ -382,12 +382,13 @@ void die(const char *txt) {
 
 int handleErrors() {
   int e = 0;
+  bool hasException = (execInfo.execute & EXEC_EXCEPTION)!=0;
   JsVar *exception = jspGetException();
-  if (exception) {
+  if (hasException) {
     jsiConsolePrintf("Uncaught %v\n", exception);
-    jsvUnLock(exception);
     e = 1;
   }
+  jsvUnLock(exception);
 
   if (jspIsInterrupted()) {
     jsiConsoleRemoveInputLine();
@@ -417,6 +418,7 @@ int main(int argc, char **argv) {
         if (i + 1 >= argc)
           fatal(1, "Expecting an extra argument");
         jshInit();
+        jswHWInit();
         jsvInit(JSVAR_CACHE_SIZE);
         jsiInit(true);
         addNativeFunction("quit", nativeQuit);
@@ -439,7 +441,7 @@ int main(int argc, char **argv) {
       } else if (!strcmp(a, "--test")) {
         bool ok;
         if (i + 1 >= argc) {
-          fatal(1, "Expecting an extra arguments");
+          fatal(1, "Expecting extra arguments");
         } else if (i + 2 == argc) {
           ok = run_test(argv[i + 1]);
         } else {
@@ -503,6 +505,7 @@ int main(int argc, char **argv) {
         cmd++;
     }
     jshInit();
+    jswHWInit();
     jsvInit(JSVAR_CACHE_SIZE);
     jsiInit(false /* do not autoload!!! */);
     addNativeFunction("quit", nativeQuit);
@@ -546,6 +549,7 @@ int main(int argc, char **argv) {
 #endif //!__MINGW32__
 
   jshInit();
+  jswHWInit();
   jsvInit(JSVAR_CACHE_SIZE);
   jsiInit(true);
 

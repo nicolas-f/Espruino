@@ -17,32 +17,42 @@
 
 #include "jsutils.h"
 #include "jsjit.h"
+#include "jsvariterator.h"
 
+// Write debug info to the console
 #define DEBUG_JIT jsjcDebugPrintf
+// Write debug info to the console IF we're in the 'emit' phase
+#define DEBUG_JIT_EMIT if (jit.phase == JSJP_EMIT) jsjcDebugPrintf
 // Called to print debug info - best to use DEBUG_JIT so we can disable debug lines for final compiles though
 void jsjcDebugPrintf(const char *fmt, ...);
 
-typedef enum {
-  JSJVT_INT,
-  JSJVT_JSVAR
-} JsjValueType;
+#define JSJ_TYPE_STACK_SIZE 64 // Most amount of types stored on stack
 
 typedef enum {
-  JSJAC_EQ, // 0
-  JSJAC_NE,
-  JSJAC_CS,
-  JSJAC_CC,
-  JSJAC_MI,
-  JSJAC_PL,
-  JSJAC_VS,
-  JSJAC_VC,
-  JSJAC_HI,
-  JSJAC_LI,
-  JSJAC_GE,
-  JSJAC_LT,
-  JSJAC_GT,
-  JSJAC_LE,
+  JSJVT_INT,
+  JSJVT_JSVAR,        ///< A JsVar
+  JSJVT_JSVAR_NO_NAME ///< A JsVar, and we know it's not a name so it doesn't need SkipName
+} PACKED_FLAGS JsjValueType;
+
+typedef enum {
+  JSJAC_EQ, // Equal / equals zero
+  JSJAC_NE, // Not equal
+  JSJAC_CS, // Carry set / unsigned higher or same
+  JSJAC_CC, // Carry clear / unsigned lower
+  JSJAC_MI, // Minus / negative
+  JSJAC_PL, // Plus / positive or zero
+  JSJAC_VS, // Overflow
+  JSJAC_VC, // No overflow
+  JSJAC_HI, // Unsigned higher
+  JSJAC_LI, // Unsigned lower or same
+  JSJAC_GE, // 10 - Signed greater than or equal
+  JSJAC_LT, // 11 - Signed less than
+  JSJAC_GT, // 12 - Signed greater than
+  JSJAC_LE, // 13 - Signed less than or equal
+  JSJAC_AL, // 14 - Always
+  JSJAC_SVC // 15 - SVC control - https://developer.arm.com/documentation/ddi0308/d/Thumb-Instructions/Alphabetical-list-of-Thumb-instructions/B
 } JsjAsmCondition;
+#define JSJAC_STRING "EQ\0NE\0CS\0CC\0MI\0PL\0VS\0VC\0HI\0LI\0GE\0LT\0GT\0LE\0AL"
 
 typedef enum {
   JSJAR_r0,
@@ -54,21 +64,59 @@ typedef enum {
   JSJAR_PC = 15,
 } JsjAsmReg;
 
+typedef enum {
+  JSJP_UNKNOWN,
+  JSJP_SCAN, /// scan for variables used
+  JSJP_EMIT  /// emit code
+} JsjPhase;
 
+
+typedef struct {
+  /// Which compilation phase are we in?
+  JsjPhase phase;
+  /// The ARM Thumb-2 code we're in the process of creating
+  JsVar *code;
+  /// An iterator to increase write speed for code
+  JsvStringIterator codeIt;
+  /// The ARM Thumb-2 variable init code block (this goes right at the start of our function)
+  JsVar *initCode;
+  /// How many blocks deep are we? blockCount=0 means we're writing to the 'code' var
+  int blockCount;
+  /// An Object mapping var name -> index on the stack
+  JsVar *vars;
+  /// How many words (not bytes) are on the stack reserved for variables?
+  int varCount;
+  /// How much stuff has been pushed on the stack so far? (including variables)
+  int stackDepth;
+  /// For each item on the stack, we store its type
+  JsjValueType typeStack[JSJ_TYPE_STACK_SIZE];
+} JsjInfo;
+
+// JIT state
+extern JsjInfo jit;
+
+typedef enum {
+  JSJC_NONE = 0,        ///< emit normally
+  JSJC_FORCE_4BYTE = 1  ///< create 4 byte instruction even if 2 byte would have done
+} JsjsEmitOptions;
 
 // Called before start of JIT output
 void jsjcStart();
 // Called when JIT output stops
 JsVar *jsjcStop();
-// Called before start of a block of code. Returns the old code jsVar that should be passed into jsjcStopBlock
+// Called before start of a block of code. Returns the old code jsVar that should be passed into jsjcStopBlock. Ignored unless in JSJP_EMIT phase
 JsVar *jsjcStartBlock();
-// Called when JIT output stops, pass it the return value from jsjcStartBlock. Returns the code parsed in the block
+// Called to start writing to 'init code' (which is inserted before everything else). Returns the old code jsVar that should be passed into jsjcStopBlock
+JsVar *jsjcStartInitCodeBlock();
+// Called when JIT output stops, pass it the return value from jsjcStartBlock. Returns the code parsed in the block. Ignored unless in JSJP_EMIT phase
 JsVar *jsjcStopBlock(JsVar *oldBlock);
 // Emit a whole block of code
 void jsjcEmitBlock(JsVar *block);
 // Get what byte we're at in our code
 int jsjcGetByteCount();
 
+// Add 8 bit literal
+void jsjcLiteral8(int reg, uint8_t data);
 // Add 16 bit literal
 void jsjcLiteral16(int reg, bool hi16, uint16_t data);
 // Add 32 bit literal
@@ -86,18 +134,28 @@ void jsjcCall(void *c);
 int jsjcLiteralString(int reg, JsVar *str, bool nullTerminate);
 // Compare a register with a literal. jsjcBranchConditionalRelative can then be called
 void jsjcCompareImm(int reg, int literal);
-// Jump a number of bytes forward or back
-void jsjcBranchRelative(int bytes);
-// Jump a number of bytes forward or back, based on condition flags
-void jsjcBranchConditionalRelative(JsjAsmCondition cond, int bytes);
+// Get length of jsjcBranchRelative in bytes
+int jsjcGetBranchRelativeLength(int bytes);
+// Jump a number of bytes forward or back, return number of bytes used for op
+int jsjcBranchRelative(int bytes, JsjsEmitOptions options);
+// Get length of jsjcBranchConditionalRelative in bytes
+int jsjcGetBranchConditionalRelativeLength(int bytes);
+// Jump a number of bytes forward or back, based on condition flags, return number of bytes used for op
+int jsjcBranchConditionalRelative(JsjAsmCondition cond, int bytes, JsjsEmitOptions options);
 // Move one register to another
 void jsjcMov(int regTo, int regFrom);
+// Add a literal to a number
+void jsjcAdd(int regTo, int regFrom, int lit);
 // Move negated register
 void jsjcMVN(int regTo, int regFrom);
 // regTo = regTo & regFrom
 void jsjcAND(int regTo, int regFrom);
+// Convert the var type in the given reg to a JsVar
+void jsjcConvertToJsVar(int reg, JsjValueType varType);
 // Push a register onto the stack
 void jsjcPush(int reg, JsjValueType type);
+// Get the type of the variable on the top of the stack
+JsjValueType jsjcGetTopType();
 // Pop off the stack to a register
 JsjValueType jsjcPop(int reg);
 // Add a value to the stack pointer (only multiple of 4)

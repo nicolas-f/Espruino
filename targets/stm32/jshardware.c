@@ -93,7 +93,10 @@ BITFIELD_DECL(jshPinOpendrainPullup, JSH_PIN_COUNT);
 volatile unsigned char jshSPIBufHead[SPI_COUNT];
 volatile unsigned char jshSPIBufTail[SPI_COUNT];
 volatile unsigned char jshSPIBuf[SPI_COUNT][4]; // 4 bytes packed into an int
+Pin jshNeoPixelPin = PIN_UNDEFINED; ///< The currently setup Neopixel pin (set by jswrap_neopixel). This is reset to PIN_UNDEFINED if we think anything could have messed it up
 #endif
+
+
 
 #ifdef USB
 JsSysTime jshLastWokenByUSB = 0;
@@ -781,7 +784,7 @@ void jshSetupRTC(bool isUsingLSI) {
   RCC_RTCCLKConfig(isUsingLSI ? RCC_RTCCLKSource_LSI : RCC_RTCCLKSource_LSE); // set clock source to low speed internal
   RCC_RTCCLKCmd(ENABLE); // enable RTC (in backup domain)
   RTC_WaitForSynchro();
-  jshSetupRTCPrescaler(isUsingLSI);  
+  jshSetupRTCPrescaler(isUsingLSI);
 }
 #endif
 
@@ -926,6 +929,9 @@ void jshDelayMicroseconds(int microsec) {
 }
 
 void jshPinSetState(Pin pin, JshPinState state) {
+  // if this is about to mess up the neopixel output, so reset our var so we know to re-init
+  if (pin == jshNeoPixelPin)
+    jshNeoPixelPin = PIN_UNDEFINED;
   /* Make sure we kill software PWM if we set the pin state
    * after we've started it */
   if (BITFIELD_GET(jshPinSoftPWM, pin)) {
@@ -2011,7 +2017,7 @@ IOEventFlags jshPinWatch(Pin pin, bool shouldWatch, JshPinWatchFlags flags) {
     EXTI_Init(&s);
 
     return shouldWatch ? (EV_EXTI0+pinInfo[pin].pin)  : EV_NONE;
-  } else jsExceptionHere(JSET_ERROR, "Invalid pin!");
+  } else jsExceptionHere(JSET_ERROR, "Invalid pin");
   return EV_NONE;
 }
 
@@ -2120,7 +2126,7 @@ void jshUSARTSetup(IOEventFlags device, JshUSARTInfo *inf) {
     usartIRQ = USART6_IRQn;
 #endif
   } else {
-    jsExceptionHere(JSET_INTERNALERROR, "Unknown serial port device.");
+    jsExceptionHere(JSET_INTERNALERROR, "Unknown serial port device");
     return;
   }
 
@@ -2147,7 +2153,7 @@ void jshUSARTSetup(IOEventFlags device, JshUSARTInfo *inf) {
     USART_InitStructure.USART_WordLength = USART_WordLength_9b;
   }
   else {
-    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial byte size.");
+    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial byte size");
     return;
   }
 
@@ -2158,7 +2164,7 @@ void jshUSARTSetup(IOEventFlags device, JshUSARTInfo *inf) {
     USART_InitStructure.USART_StopBits = USART_StopBits_2;
   }
   else {
-    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial stopbits length.");
+    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial stopbits length");
     return;
   } // FIXME: How do we handle 1.5 stopbits?
 
@@ -2174,7 +2180,7 @@ void jshUSARTSetup(IOEventFlags device, JshUSARTInfo *inf) {
     USART_InitStructure.USART_Parity = USART_Parity_Even;
   }
   else {
-    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial parity mode.");
+    jsExceptionHere(JSET_INTERNALERROR, "Unsupported serial parity mode");
     return;
   }
 
@@ -2226,6 +2232,9 @@ void jshSPISetup(IOEventFlags device, JshSPIInfo *inf) {
   JshPinFunction functions[3] = { JSH_SPI_SCK, JSH_SPI_MISO, JSH_SPI_MOSI };
   SPI_TypeDef *SPIx = (SPI_TypeDef *)checkPinsForDevice(funcType, 3, pins, functions);
   if (!SPIx) return; // failed to find matching pins
+
+  // this could be about to mess up the neopixel output, so reset our var so we know to re-init
+  jshNeoPixelPin = PIN_UNDEFINED;
 
   SPI_InitTypeDef SPI_InitStructure;
   SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
@@ -3014,7 +3023,7 @@ void jshFlashWrite(void *buf, uint32_t addr, uint32_t len) {
 size_t jshFlashGetMemMapAddress(size_t ptr) { return ptr; }
 
 int jshSetSystemClockPClk(JsVar *options, const char *clkName) {
-  JsVar *v = jsvObjectGetChild(options, clkName, 0);
+  JsVar *v = jsvObjectGetChildIfExists(options, clkName);
   JsVarInt i = jsvGetIntegerAndUnLock(v);
   if (i==1) return RCC_HCLK_Div1;
   if (i==2) return RCC_HCLK_Div2;
@@ -3031,10 +3040,10 @@ int jshSetSystemClockPClk(JsVar *options, const char *clkName) {
 unsigned int jshSetSystemClock(JsVar *options) {
   // see system_stm32f4xx.c for clock configurations
 #ifdef STM32F4
-  unsigned int m = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChild(options, "M", 0));
-  unsigned int n = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChild(options, "N", 0));
-  unsigned int p = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChild(options, "P", 0));
-  unsigned int q = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChild(options, "Q", 0));
+  unsigned int m = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(options, "M"));
+  unsigned int n = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(options, "N"));
+  unsigned int p = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(options, "P"));
+  unsigned int q = (unsigned int)jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(options, "Q"));
   if (!IS_RCC_PLLM_VALUE(m)) {
     jsExceptionHere(JSET_ERROR, "Invalid PLL M value %d", m);
     return 0;
@@ -3052,7 +3061,7 @@ unsigned int jshSetSystemClock(JsVar *options) {
     return 0;
   }
   uint8_t latency = 255;
-  JsVar *v = jsvObjectGetChild(options, "latency", 0);
+  JsVar *v = jsvObjectGetChildIfExists(options, "latency");
   if (v) {
     latency = (uint8_t)jsvGetIntegerAndUnLock(v);
     if (!IS_FLASH_LATENCY(latency)) {

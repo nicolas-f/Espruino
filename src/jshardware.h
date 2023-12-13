@@ -222,6 +222,12 @@ void jshEnableWatchDog(JsVarFloat timeout);
 // Kick the watchdog
 void jshKickWatchDog();
 
+/* Sometimes we allow a Ctrl-C or button press (eg. Bangle.js) to cause an interruption if there
+is no response from the interpreter, and that interruption can then break out of Flash Writes
+for instance. But there are certain things (like compaction) that we REALLY don't want to
+break out of, so they can call jshKickSoftWatchDog to stop it. */
+void jshKickSoftWatchDog();
+
 /// Check the pin associated with this EXTI - return true if the pin's input is a logic 1
 bool jshGetWatchedPinState(IOEventFlags device);
 
@@ -359,6 +365,8 @@ bool jshFlashGetPage(uint32_t addr, uint32_t *startAddr, uint32_t *pageSize);
 JsVar *jshFlashGetFree();
 /// Erase the flash page containing the address
 void jshFlashErasePage(uint32_t addr);
+/// Erase the flash pages containing the address - return true on success
+bool jshFlashErasePages(uint32_t addr, uint32_t byteLength);
 /** Read data from flash memory into the buffer, the flash address has no alignment restrictions
   * and the len may be (and often is) 1 byte */
 void jshFlashRead(void *buf, uint32_t addr, uint32_t len);
@@ -476,7 +484,8 @@ JshPinState jshVirtualPinGetState(Pin pin);
 #define WAIT_UNTIL(CONDITION, REASON) { \
     int timeout = WAIT_UNTIL_N_CYCLES;                                              \
     while (!(CONDITION) && !jspIsInterrupted() && (timeout--)>0);                  \
-    if (timeout<=0 || jspIsInterrupted()) { jsExceptionHere(JSET_INTERNALERROR, "Timeout on " REASON); }  \
+    if (jspIsInterrupted()) { jsExceptionHere(JSET_INTERNALERROR, "Interrupted in " REASON); }  \
+    else if (timeout<=0) { jsExceptionHere(JSET_INTERNALERROR, "Timeout on " REASON ); }  \
 }
 
 #endif /* JSHARDWARE_H_ */

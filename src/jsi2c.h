@@ -11,6 +11,9 @@
  * I2C Utility functions, and software I2C
  * ----------------------------------------------------------------------------
  */
+#ifndef JSI2C_H_
+#define JSI2C_H_
+
 #include "jsvar.h"
 #include "jshardware.h"
 
@@ -19,7 +22,11 @@ bool jsi2cPopulateI2CInfo(
     JsVar      *options
   );
 
+#if ESPR_NO_SOFTWARE_I2C!=1
 void jsi2cSetup(JshI2CInfo *inf);
 void jsi2cUnsetup(JshI2CInfo *inf); ///< turn off I2C (remove pullups/sense)
 bool jsi2cWrite(JshI2CInfo *inf, unsigned char address, int nBytes, const unsigned char *data, bool sendStop);
 bool jsi2cRead(JshI2CInfo *inf, unsigned char address, int nBytes, unsigned char *data, bool sendStop);
+#endif // ESPR_NO_SOFT_I2C
+
+#endif // JSI2C_H_

@@ -1,4 +1,4 @@
-#!/usr/bin/node
+#!/usr/bin/env node
 
 if (process.argv.length == 3 && process.argv[2] == "BANGLEJS") {
   var EMULATOR = "banglejs1";
@@ -28,7 +28,6 @@ eval(require("fs").readFileSync(__dirname + "/../../EspruinoWebIDE/emu/common.js
 
 var Const = {};
 var module = undefined;
-var Espruino = require(__dirname + "/../../EspruinoAppLoaderCore/lib/espruinotools.js");
 
 /* we factory reset ONCE, get this, then we can use it to reset
 state quickly for each new app */
@@ -78,16 +77,17 @@ function runTest(file) {
 
 // wait until loaded...
 setTimeout(function() {
-  console.log("Loaded...");
+  console.log("Loaded Emulator...");
   jsInit();
+  console.log("jsInit complete.");
   jsIdle();
-  console.log("Factory reset");
+  console.log("jsIdle complete, performing factory reset.");
   jsTransmitString("Bangle.factoryReset()\n");
   factoryFlashMemory.set(flashMemory);
-  console.log("Ready!");
+  console.log("Emulator Ready!");
   appLog = "";
   require("fs").readdirSync(TESTS_DIR).forEach(file => file.endsWith(`.${DEVICEID}.txt`) && runTest(file));
-  console.log("Finish");
+  console.log("Finished.");
   jsStopIdle();
 
   if (erroredApps.length) {

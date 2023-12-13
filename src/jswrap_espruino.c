@@ -20,10 +20,24 @@
 #include "jsflash.h"
 #include "jswrapper.h"
 #include "jsinteractive.h"
+#include "jswrap_interactive.h"
 #include "jstimer.h"
 #ifdef PUCKJS
 #include "jswrap_puck.h" // jswrap_puck_getTemperature
 #endif
+
+/*JSON{
+    "type" : "variable",
+    "name" : "__FILE__",
+    "generate" : false,
+    "return" : ["JsVar","The filename of the JavaScript that is currently executing"]
+}
+The filename of the JavaScript that is currently executing.
+
+If `load` has been called with a filename (eg `load("myfile.js")`) then
+`__FILE__` is set to that filename. Otherwise (eg `load()`) or immediately
+after booting, `__FILE__` is not set.
+*//*Documentation only*/
 
 /*JSON{
   "type" : "class",
@@ -256,7 +270,7 @@ JsVar *jswrap_espruino_nativeCall(JsVarInt addr, JsVar *signature, JsVar *data) 
   JsVar *fn = jsvNewNativeFunction((void *)(size_t)addr, (unsigned short)argTypes);
   if (data) {
     JsVar *flat = jsvAsFlatString(data);
-    jsvUnLock2(jsvAddNamedChild(fn, flat, JSPARSE_FUNCTION_CODE_NAME), flat);
+    jsvAddNamedChildAndUnLock(fn, flat, JSPARSE_FUNCTION_CODE_NAME);
   }
   return fn;
 }
@@ -300,7 +314,7 @@ Sum the contents of the given Array, String or ArrayBuffer and return the result
  */
 JsVarFloat jswrap_espruino_sum(JsVar *arr) {
   if (!(jsvIsString(arr) || jsvIsArray(arr) || jsvIsArrayBuffer(arr))) {
-    jsExceptionHere(JSET_ERROR, "Expecting first argument to be an array, not %t", arr);
+    jsExceptionHere(JSET_ERROR, "First argument must be Array, not %t", arr);
     return NAN;
   }
   JsVarFloat sum = 0;
@@ -334,7 +348,7 @@ v+=Math.pow(mean-arr[i],2)`
  */
 JsVarFloat jswrap_espruino_variance(JsVar *arr, JsVarFloat mean) {
   if (!(jsvIsIterable(arr))) {
-    jsExceptionHere(JSET_ERROR, "Expecting first argument to be iterable, not %t", arr);
+    jsExceptionHere(JSET_ERROR, "First argument must iterable, not %t", arr);
     return NAN;
   }
   JsVarFloat variance = 0;
@@ -602,27 +616,28 @@ If `isAuto` is false, you must call `E.kickWatchdog()` yourself every so often
 or the chip will reset.
 
 ```
-E.enableWatchdog(0.5); // automatic mode                                                        
+E.enableWatchdog(0.5); // automatic mode
 while(1); // Espruino will reboot because it has not been idle for 0.5 sec
 ```
 
 ```
-E.enableWatchdog(1, false);                                                         
+E.enableWatchdog(1, false);
 setInterval(function() {
   if (everything_ok)
     E.kickWatchdog();
 }, 500);
 // Espruino will now reset if everything_ok is false,
-// or if the interval fails to be called 
+// or if the interval fails to be called
 ```
 
-**NOTE:** This is only implemented on STM32 and nRF5x devices (all official
+**NOTE:** This is only implemented on STM32, nRF5x and ESP32 devices (all official
 Espruino boards).
 
 **NOTE:** On STM32 (Pico, WiFi, Original) with `setDeepSleep(1)` you need to
 explicitly wake Espruino up with an interval of less than the watchdog timeout
 or the watchdog will fire and the board will reboot. You can do this with
 `setInterval("", time_in_milliseconds)`.
+**NOTE:** On ESP32, the timeout will be rounded to the nearest second.
  */
 void jswrap_espruino_enableWatchdog(JsVarFloat time, JsVar *isAuto) {
   if (time<0 || isnan(time)) time=1;
@@ -762,12 +777,44 @@ their values.
   "ifndef" : "SAVE_ON_FLASH",
   "generate" : "jswrap_pipe",
   "params" : [
-    ["source","JsVar","The source file/stream that will send content."],
+    ["source","JsVar","The source file/stream that will send content. As of 2v19 this can also be a `String`"],
     ["destination","JsVar","The destination file/stream that will receive content from the source."],
-    ["options","JsVar",["An optional object `{ chunkSize : int=64, end : bool=true, complete : function }`","chunkSize : The amount of data to pipe from source to destination at a time","complete : a function to call when the pipe activity is complete","end : call the 'end' function on the destination when the source is finished"]]
+    ["options","JsVar",["[optional] An object `{ chunkSize : int=64, end : bool=true, complete : function }`","chunkSize : The amount of data to pipe from source to destination at a time","complete : a function to call when the pipe activity is complete","end : call the 'end' function on the destination when the source is finished"]]
   ],
-  "typescript" : "pipe(source: any, destination: any, options?: { chunkSize?: number, end?: boolean, complete?: () => void }): void"
-}*/
+  "typescript" : "pipe(source: any, destination: any, options?: PipeOptions): void"
+}
+Pipe one stream to another.
+
+This can be given any object with a `read` method as a source, and any object with a `.write(data)` method as a destination.
+
+Data will be piped from `source` to `destination` in the idle loop until `source.read(...)` returns `undefined`.
+
+For instance:
+
+```
+// Print a really big string to the console, 1 character at a time and write 'Finished!' at the end
+E.pipe("This is a really big String",
+       {write: print},
+       {chunkSize:1, complete:()=>print("Finished!")});
+
+// Pipe the numbers 1 to 100 to a StorageFile in Storage
+E.pipe({ n:0, read : function() { if (this.n<100) return (this.n++)+"\n"; }},
+       require("Storage").open("testfile","w"));
+
+// Pipe a StorageFile straight to the Bluetooth UART
+E.pipe(require("Storage").open("testfile","r"), Bluetooth);
+
+// Pipe a normal file in Storage (not StorageFile) straight to the Bluetooth UART
+E.pipe(require("Storage").read("blob.txt"), Bluetooth);
+
+// Pipe a normal file in Storage as a response to an HTTP request
+function onPageRequest(req, res) {
+  res.writeHead(200, {'Content-Type': 'text/plain'});
+  E.pipe(require("Storage").read("webpage.txt"), res);
+}
+require("http").createServer(onPageRequest).listen(80);
+```
+*/
 
 /*JSON{
   "type" : "staticmethod",
@@ -792,6 +839,53 @@ JsVar *jswrap_espruino_toArrayBuffer(JsVar *str) {
   return jsvNewArrayBufferFromString(str, 0);
 }
 
+void (_jswrap_espruino_toString_char)(int ch,  JsvStringIterator *it) {
+  jsvStringIteratorSetCharAndNext(it, (char)ch);
+}
+
+JsVar *jswrap_espruino_toStringX(JsVar *args, bool forceFlat) {
+  // One argument
+  if (jsvGetArrayLength(args)==1) {
+    JsVar *arg = jsvGetArrayItem(args,0);
+    // Is it a flat string? If so we're there already - just return it
+    if ((jsvIsString(arg) && !forceFlat) || jsvIsFlatString(arg))
+      return arg;
+    // In the case where we have a Uint8Array,etc, return it directly
+    if (jsvIsArrayBuffer(arg) &&
+        JSV_ARRAYBUFFER_GET_SIZE(arg->varData.arraybuffer.type)==1 &&
+        arg->varData.arraybuffer.byteOffset==0) {
+      JsVar *backing = jsvGetArrayBufferBackingString(arg, NULL);
+      if (((backing && !forceFlat) || jsvIsFlatString(backing)) &&
+           jsvGetLength(backing) == arg->varData.arraybuffer.length) {
+        jsvUnLock(arg);
+        return backing;
+      }
+      jsvUnLock(backing);
+    }
+    jsvUnLock(arg);
+  }
+  // Allocate data
+  unsigned int len = (unsigned int)jsvIterateCallbackCount(args);
+  JsVar *str = forceFlat ? jsvNewFlatStringOfLength(len) : jsvNewStringOfLength(len, NULL);
+  if (forceFlat && !str) {
+    // if we couldn't do it, try again after garbage collecting/defrag
+#ifdef SAVE_ON_FLASH
+    jsvGarbageCollect();
+#else
+    jsvDefragment();
+#endif
+    str = jsvNewFlatStringOfLength(len);
+  }
+  if (!str) return 0;
+  // Now use jsvIterateCallback to add in data
+  JsvStringIterator it;
+  jsvStringIteratorNew(&it, str, 0);
+  jsvIterateCallback(args, (void (*)(int,  void *))_jswrap_espruino_toString_char, &it);
+  jsvStringIteratorFree(&it);
+
+  return str;
+}
+
 /*JSON{
   "type" : "staticmethod",
   "class" : "E",
@@ -800,63 +894,162 @@ JsVar *jswrap_espruino_toArrayBuffer(JsVar *str) {
   "params" : [
     ["args","JsVarArray","The arguments to convert to a String"]
   ],
-  "return" : ["JsVar","A String (or `undefined` if a Flat String cannot be created)"],
+  "return" : ["JsVar","A String"],
   "return_object" : "String",
-  "typescript" : "toString(...args: any[]): string | undefined;"
+  "typescript" : "toString(...args: any[]): string;"
 }
-Returns a 'flat' string representing the data in the arguments, or return
-`undefined` if a flat string cannot be created.
+Returns a `String` representing the data in the arguments.
 
-This creates a string from the given arguments. If an argument is a String or an
-Array, each element is traversed and added as an 8 bit character. If it is
-anything else, it is converted to a character directly.
+This creates a string from the given arguments in the same way as `E.toUint8Array`. If each argument is:
+
+* A String or an Array, each element is traversed and added as an 8 bit character
+* `{data : ..., count : N}` causes `data` to be repeated `count` times
+* `{callback : fn}` calls the function and adds the result
+* Anything else is converted to a character directly.
 
 In the case where there's one argument which is an 8 bit typed array backed by a
 flat string of the same length, the backing string will be returned without
 doing a copy or other allocation. The same applies if there's a single argument
 which is itself a flat string.
+
+```JS
+E.toString(0,1,2,"Hi",3)
+"\0\1\2Hi\3"
+E.toString(1,2,{data:[3,4], count:4},5,6)
+"\1\2\3\4\3\4\3\4\3\4\5\6"
+>E.toString(1,2,{callback : () => "Hello World"},5,6)
+="\1\2Hello World\5\6"
+```
+
+**Note:** Prior to Espruino 2v18 `E.toString` would always return a flat string,
+or would return `undefined` if one couldn't be allocated. Now, it will return
+a normal (fragmented) String if a contiguous chunk of memory cannot be allocated.
+You can still check if the returned value is a Flat string using `E.getAddressOf(str, true)!=0`,
+or can use `E.toFlatString` instead.
+
  */
-void (_jswrap_espruino_toString_char)(int ch,  JsvStringIterator *it) {
-  jsvStringIteratorSetCharAndNext(it, (char)ch);
-}
-
 JsVar *jswrap_espruino_toString(JsVar *args) {
-  // One argument
-  if (jsvGetArrayLength(args)==1) {
-    JsVar *arg = jsvGetArrayItem(args,0);
-    // Is it a flat string? If so we're there already - just return it
-    if (jsvIsFlatString(arg))
-      return arg;
-    // In the case where we have a Uint8Array,etc, return it directly
-    if (jsvIsArrayBuffer(arg) &&
-        JSV_ARRAYBUFFER_GET_SIZE(arg->varData.arraybuffer.type)==1 &&
-        arg->varData.arraybuffer.byteOffset==0) {
-      JsVar *backing = jsvGetArrayBufferBackingString(arg, NULL);
-      if (jsvIsFlatString(backing) &&
-          jsvGetCharactersInVar(backing) == arg->varData.arraybuffer.length) {
-        jsvUnLock(arg);
-        return backing;
-      }
-      jsvUnLock(backing);
-    }
-    jsvUnLock(arg);
-  }
-
-  unsigned int len = (unsigned int)jsvIterateCallbackCount(args);
-  JsVar *str = jsvNewFlatStringOfLength(len);
-  if (!str) {
-    // if we couldn't do it, try again after garbage collecting
-    jsvGarbageCollect();
-    str = jsvNewFlatStringOfLength(len);
-  }
-  if (!str) return 0;
-  JsvStringIterator it;
-  jsvStringIteratorNew(&it, str, 0);
-  jsvIterateCallback(args, (void (*)(int,  void *))_jswrap_espruino_toString_char, &it);
-  jsvStringIteratorFree(&it);
-
-  return str;
+  return jswrap_espruino_toStringX(args, false);
 }
+/*JSON{
+  "type" : "staticmethod",
+  "class" : "E",
+  "name" : "toFlatString",
+  "generate" : "jswrap_espruino_toFlatString",
+  "params" : [
+    ["args","JsVarArray","The arguments to convert to a Flat String"]
+  ],
+  "return" : ["JsVar","A Flat String (or undefined)"],
+  "return_object" : "String",
+  "typescript" : "toFlatString(...args: any[]): string | undefined;"
+}
+Returns a Flat `String` representing the data in the arguments, or `undefined` if one can't be allocated.
+
+This provides the same behaviour that `E.toString` had in Espruino before 2v18 - see `E.toString` for
+more information.
+ */
+JsVar *jswrap_espruino_toFlatString(JsVar *args) {
+  return jswrap_espruino_toStringX(args, true);
+}
+
+/*JSON{
+  "type" : "staticmethod",
+  "ifndef" : "SAVE_ON_FLASH",
+  "class" : "E",
+  "name" : "asUTF8",
+  "generate" : "jswrap_espruino_asUTF8",
+  "params" : [
+    ["str","JsVar","The string to turn into a UTF8 Unicode String"]
+  ],
+  "return" : ["JsVar","A String"],
+  "return_object" : "String"
+}
+By default, strings in Espruino are standard 8 bit binary strings
+unless they contain Unicode chars or a `\u####` escape code
+that doesn't map to the range 0..255.
+
+However calling E.asUTF8 will convert one of those strings to
+UTF8.
+
+```
+var s = String.fromCharCode(0xF0,0x9F,0x8D,0x94);
+var u = E.asUTF8(s);
+s.length // 4
+s[0] // "\xF0"
+u.length // 1
+u[0] // hamburger emoji
+```
+
+**NOTE:** UTF8 is currently only available on Bangle.js devices
+*/
+JsVar *jswrap_espruino_asUTF8(JsVar *str) {
+#ifdef ESPR_UNICODE_SUPPORT
+  return jsvNewUTF8StringAndUnLock(jsvAsString(str));
+#else
+  jsExceptionHere(JSET_ERROR, "Unicode not supported on this build");
+  return 0;
+#endif
+}
+
+/*JSON{
+  "type" : "staticmethod",
+  "ifndef" : "SAVE_ON_FLASH",
+  "class" : "E",
+  "name" : "fromUTF8",
+  "generate" : "jswrap_espruino_fromUTF8",
+  "params" : [
+    ["str","JsVar","The string to check"]
+  ],
+  "return" : ["JsVar","A String"],
+  "return_object" : "String"
+}
+Given a UTF8 String (see `E.asUTF8`) this returns the underlying representation
+of that String.
+
+```
+E.fromUTF8("\u03C0") == "\xCF\x80"
+```
+
+**NOTE:** UTF8 is currently only available on Bangle.js devices
+*/
+JsVar *jswrap_espruino_fromUTF8(JsVar *str) {
+#ifdef ESPR_UNICODE_SUPPORT
+  if (!str) return 0;
+  return jsvGetUTF8BackingString(str);
+#else
+  return false;
+#endif
+}
+
+/*JSON{
+  "type" : "staticmethod",
+  "ifndef" : "SAVE_ON_FLASH",
+  "class" : "E",
+  "name" : "isUTF8",
+  "generate" : "jswrap_espruino_isUTF8",
+  "params" : [
+    ["str","JsVar","The string to check"]
+  ],
+  "return" : ["bool","True if the given String is treated as UTF8 by Espruino"]
+}
+By default, strings in Espruino are standard 8 bit binary strings
+unless they contain Unicode chars or a `\u####` escape code
+that doesn't map to the range 0..255.
+
+This checks if a String is being treated by Espruino as a UTF8 String
+
+See `E.asUTF8` to convert to a UTF8 String
+
+**NOTE:** UTF8 is currently only available on Bangle.js devices
+*/
+bool jswrap_espruino_isUTF8(JsVar *str) {
+#ifdef ESPR_UNICODE_SUPPORT
+  return jsvIsUTF8String(str);
+#else
+  return false;
+#endif
+}
+
 
 /*TYPESCRIPT
 type Uint8ArrayResolvable =
@@ -1082,7 +1275,7 @@ int jswrap_espruino_setClock(JsVar *options) {
   "generate" : "jswrap_espruino_setConsole",
   "params" : [
     ["device","JsVar",""],
-    ["options","JsVar","(optional) object of options, see below"]
+    ["options","JsVar","[optional] object of options, see below"]
   ],
   "typescript" : "setConsole(device: \"Serial1\" | \"USB\" | \"Bluetooth\" | \"Telnet\" | \"Terminal\" | Serial | null, options?: { force?: boolean }): void;"
 }
@@ -1202,6 +1395,11 @@ void jswrap_espruino_dumpTimers() {
 }
 Dump any locked variables that aren't referenced from `global` - for debugging
 memory leaks only.
+
+**Note:** This does a linear scan over memory, finding variables
+that are currently locked. In some cases it may show variables
+like `Unknown 66` which happen when *part* of a string has ended
+up placed in memory ahead of the String that it's part of. See https://github.com/espruino/Espruino/issues/2345
 */
 #ifndef RELEASE
 void jswrap_espruino_dumpLockedVars() {
@@ -1683,22 +1881,25 @@ JsVar *jswrap_espruino_CRC32(JsVar *data) {
     ["hue","float","The hue, as a value between 0 and 1"],
     ["sat","float","The saturation, as a value between 0 and 1"],
     ["bri","float","The brightness, as a value between 0 and 1"],
-    ["asArray","bool","If true, return an array of [R,G,B] values betwen 0 and 255"]
+    ["format","int","If `true` or `1`, return an array of [R,G,B] values betwen 0 and 255. If `16`, return a 16 bit number. `undefined`/`24` is the same as normal (returning a 24 bit number)"]
   ],
   "return" : ["JsVar","A 24 bit number containing bytes representing red, green, and blue `0xBBGGRR`. Or if `asArray` is true, an array `[R,G,B]`"],
   "typescript" : [
-    "HSBtoRGB(hue: number, sat: number, bri: number, asArray?: false): number;",
-    "HSBtoRGB(hue: number, sat: number, bri: number, asArray: true): [number, number, number];"
+    "HSBtoRGB(hue: number, sat: number, bri: number, format?: false): number;",
+    "HSBtoRGB(hue: number, sat: number, bri: number, format: 16): number;",
+    "HSBtoRGB(hue: number, sat: number, bri: number, format: 24): number;",
+    "HSBtoRGB(hue: number, sat: number, bri: number, format: true): [number, number, number];"
   ]
 }
 Convert hue, saturation and brightness to red, green and blue (packed into an
 integer if `asArray==false` or an array if `asArray==true`).
 
 This replaces `Graphics.setColorHSB` and `Graphics.setBgColorHSB`. On devices
-with 24 bit colour it can be used as: `Graphics.setColor(E.HSBtoRGB(h, s, b))`
+with 24 bit colour it can be used as: `Graphics.setColor(E.HSBtoRGB(h, s, b))`,
+or on devices with 26 bit colour use `Graphics.setColor(E.HSBtoRGB(h, s, b, 16))`
 
 You can quickly set RGB items in an Array or Typed Array using
-`array.set(E.HSBtoRGB(h, s, b,true), offset)`, which can be useful with arrays
+`array.set(E.HSBtoRGB(h, s, b, true), offset)`, which can be useful with arrays
 used with `require("neopixel").write`.
  */
 int jswrap_espruino_HSBtoRGB_int(JsVarFloat hue, JsVarFloat sat, JsVarFloat bri) {
@@ -1734,13 +1935,21 @@ int jswrap_espruino_HSBtoRGB_int(JsVarFloat hue, JsVarFloat sat, JsVarFloat bri)
     return (b<<16) | (g<<8) | r;
   }
 }
-JsVar *jswrap_espruino_HSBtoRGB(JsVarFloat hue, JsVarFloat sat, JsVarFloat bri, bool asArray) {
+JsVar *jswrap_espruino_HSBtoRGB(JsVarFloat hue, JsVarFloat sat, JsVarFloat bri, int format) {
   int rgb = jswrap_espruino_HSBtoRGB_int(hue, sat, bri);
-  if (!asArray) return jsvNewFromInteger(rgb);
+  if (format==0 || format==24) return jsvNewFromInteger(rgb);
+  int r = rgb&0xFF;
+  int g = (rgb>>8)&0xFF;
+  int b = (rgb>>16)&0xFF;
+  if (format==16) return jsvNewFromInteger((JsVarInt)((b>>3) | (g>>2)<<5 | (r>>3)<<11));
+  if (format!=1) {
+    jsExceptionHere(JSET_ERROR, "HSBtoRGB's format arg expects undefined/1/16/24");
+    return 0;
+  }
   JsVar *arrayElements[] = {
-      jsvNewFromInteger(rgb&0xFF),
-      jsvNewFromInteger((rgb>>8)&0xFF),
-      jsvNewFromInteger((rgb>>16)&0xFF)
+      jsvNewFromInteger(r),
+      jsvNewFromInteger(g),
+      jsvNewFromInteger(b)
   };
   JsVar *arr = jsvNewArray(arrayElements, 3);
   jsvUnLockMany(3, arrayElements);
@@ -1787,7 +1996,7 @@ If a password has been set with `E.setPassword()`, this will lock the console so
 the password needs to be entered to unlock it.
 */
 void jswrap_espruino_lockConsole() {
-  JsVar *pwd = jsvObjectGetChild(execInfo.hiddenRoot, PASSWORD_VARIABLE_NAME, 0);
+  JsVar *pwd = jsvObjectGetChildIfExists(execInfo.hiddenRoot, PASSWORD_VARIABLE_NAME);
   if (pwd)
     jsiStatus |= JSIS_PASSWORD_PROTECTED;
   jsvUnLock(pwd);
@@ -1875,13 +2084,9 @@ Note that when DST parameters are set (i.e. when `dstOffset` is not zero),
 `E.setTimeZone()` has no effect.
 */
 void jswrap_espruino_setDST(JsVar *params) {
-  JsVar *dst;
-  JsvIterator it;
-  unsigned int i = 0;
-
   if (!jsvIsArray(params)) return;
   if (jsvGetLength(params) != 12) return;
-  dst = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT16, params, 0, 0);
+  JsVar *dst = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT16, params, 0, 0);
   jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR, dst);
 }
 #endif
@@ -1991,12 +2196,17 @@ reset pin had been toggled.
 Espruino (resetting the interpreter and pin states, but not all the hardware)
 */
 void jswrap_espruino_reboot() {
+#ifndef EMULATED
   // ensure `E.on('kill',...` gets called and everything is torn down correctly
   jsiKill();
   jsvKill();
   jshKill();
 
   jshReboot();
+#else // EMULATED
+  // if emulated, just call reset() to avoid a crash
+  jswrap_interface_reset(false);
+#endif
 }
 
 
@@ -2031,7 +2241,7 @@ void jswrap_espruino_setUSBHID(JsVar *arr) {
     return;
   }
 
-  JsVar *report = jsvObjectGetChild(arr, "reportDescriptor", 0);
+  JsVar *report = jsvObjectGetChildIfExists(arr, "reportDescriptor");
   if (!(jsvIsArray(report) || jsvIsArrayBuffer(report) || jsvIsString(report))) {
     jsExceptionHere(JSET_TYPEERROR, "Object.reportDescriptor should be an Array or String, got %t", arr);
     jsvUnLock(report);
@@ -2214,8 +2424,8 @@ E.decodeUTF8("UTF-8 Euro: \u00e2\u0082\u00ac", unicodeRemap, '[?]') == "UTF-8 Eu
 
  */
 JsVar *jswrap_espruino_decodeUTF8(JsVar *str, JsVar *lookup, JsVar *replaceFn) {
-  if (!(jsvIsString(str))) {
-    jsExceptionHere(JSET_ERROR, "Expecting first argument to be a string, not %t", str);
+  if (!jsvIsString(str)) {
+    jsExceptionHere(JSET_ERROR, "First argument must be String");
     return 0;
   }
   JsvStringIterator it, dit;
@@ -2268,3 +2478,32 @@ JsVar *jswrap_espruino_decodeUTF8(JsVar *str, JsVar *lookup, JsVar *replaceFn) {
   return dst;
 }
 
+/*JSON{
+  "type" : "staticmethod",
+  "class" : "E",
+  "name" : "stopEventPropagation",
+  "generate" : "jswrap_espruino_stopEventPropagation"
+}
+When using events with `X.on('foo', function() { ... })`
+and then `X.emit('foo')` you might want to stop subsequent
+event handlers from being executed.
+
+Calling this function doing the execution of events will
+ensure that no subsequent event handlers are executed.
+
+```
+var X = {}; // in Espruino all objects are EventEmitters
+X.on('foo', function() { print("A"); })
+X.on('foo', function() { print("B"); E.stopEventPropagation(); })
+X.on('foo', function() { print("C"); })
+X.emit('foo');
+// prints A,B but not C
+```
+ */
+void jswrap_espruino_stopEventPropagation() {
+  if (jsiStatus & JSIS_EVENTEMITTER_PROCESSING) {
+    jsiStatus |= JSIS_EVENTEMITTER_STOP;
+  } else {
+    jsExceptionHere(JSET_ERROR, "E.stopEventPropagation() called when not handling events");
+  }
+}

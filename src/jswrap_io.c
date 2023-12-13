@@ -30,7 +30,7 @@
   "generate_full" : "jswrap_io_peek(addr,count,1)",
   "params"        : [
     ["addr", "int", "The address in memory to read"],
-    ["count", "int", "(optional) the number of items to read. If >1 a Uint8Array will be returned."]
+    ["count", "int", "[optional] the number of items to read. If >1 a Uint8Array will be returned."]
   ],
   "return"        : ["JsVar","The value of memory at the given location"],
   "typescript"    : [
@@ -58,7 +58,7 @@ Write 8 bits of memory at the given location - VERY DANGEROUS!
   "generate_full" : "jswrap_io_peek(addr,count,2)",
   "params" : [
     ["addr","int","The address in memory to read"],
-    ["count","int","(optional) the number of items to read. If >1 a Uint16Array will be returned."]
+    ["count","int","[optional] the number of items to read. If >1 a Uint16Array will be returned."]
   ],
   "return" : ["JsVar","The value of memory at the given location"],
   "typescript" : [
@@ -86,7 +86,7 @@ Write 16 bits of memory at the given location - VERY DANGEROUS!
   "generate_full" : "jswrap_io_peek(addr,count,4)",
   "params" : [
     ["addr","int","The address in memory to read"],
-    ["count","int","(optional) the number of items to read. If >1 a Uint32Array will be returned."]
+    ["count","int","[optional] the number of items to read. If >1 a Uint32Array will be returned."]
   ],
   "return" : ["JsVar","The value of memory at the given location"],
   "typescript" : [
@@ -210,10 +210,10 @@ void jswrap_io_analogWrite(Pin pin, JsVarFloat value, JsVar *options) {
   JsVarFloat freq = 0;
   JshAnalogOutputFlags flags = JSAOF_NONE;
   if (jsvIsObject(options)) {
-    freq = jsvGetFloatAndUnLock(jsvObjectGetChild(options, "freq", 0));
-    if (jsvGetBoolAndUnLock(jsvObjectGetChild(options, "forceSoft", 0)))
+    freq = jsvGetFloatAndUnLock(jsvObjectGetChildIfExists(options, "freq"));
+    if (jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(options, "forceSoft")))
           flags |= JSAOF_FORCE_SOFTWARE;
-    else if (jsvGetBoolAndUnLock(jsvObjectGetChild(options, "soft", 0)))
+    else if (jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(options, "soft")))
       flags |= JSAOF_ALLOW_SOFTWARE;
   }
 
@@ -248,7 +248,7 @@ anything over a few milliseconds, use setTimeout instead.
  */
 void jswrap_io_digitalPulse(Pin pin, bool value, JsVar *times) {
   if (!jshIsPinValid(pin)) {
-    jsExceptionHere(JSET_ERROR, "Invalid pin!");
+    jsExceptionHere(JSET_ERROR, "Invalid pin");
     return;
   }
   // check for currently running timer tasks
@@ -260,7 +260,7 @@ void jswrap_io_digitalPulse(Pin pin, bool value, JsVar *times) {
   if (jsvIsNumeric(times)) {
     JsVarFloat pulseTime = jsvGetFloat(times);
     if (pulseTime<0 || isnan(pulseTime)) {
-      jsExceptionHere(JSET_ERROR, "Pulse Time given for digitalPulse is less than 0, or not a number");
+      jsExceptionHere(JSET_ERROR, "Pulse Time is less than 0 or not a number");
     } else if (pulseTime>0) {
       if (!hasTimer) jshPinOutput(pin, value);
       task.time += jshGetTimeFromMilliseconds(pulseTime);
@@ -284,7 +284,7 @@ void jswrap_io_digitalPulse(Pin pin, bool value, JsVar *times) {
     }
     jsvIteratorFree(&it);
   } else {
-    jsExceptionHere(JSET_ERROR, "Expecting a number or array, got %t", times);
+    jsExceptionHere(JSET_ERROR, "Expecting Number or Array, got %t", times);
   }
 }
 
@@ -337,7 +337,7 @@ void jswrap_io_digitalWrite(
       JsVar *v = jsvNewFromInteger(value);
       jsvUnLock(jspeFunctionCall(w,0,pinVar,false,1,&v));
       jsvUnLock(v);
-    } else jsExceptionHere(JSET_ERROR, "Invalid pin!");
+    } else jsExceptionHere(JSET_ERROR, "Invalid pin");
     jsvUnLock(w);
   } else {
     // Handle the case where it is a single pin.
@@ -391,7 +391,7 @@ JsVarInt jswrap_io_digitalRead(JsVar *pinVar) {
     JsVar *r = jspGetNamedField(pinVar, "read", false);
     if (jsvIsFunction(r)) {
       v = jsvGetIntegerAndUnLock(jspeFunctionCall(r,0,pinVar,false,0,0));
-    } else jsExceptionHere(JSET_ERROR, "Invalid pin!");
+    } else jsExceptionHere(JSET_ERROR, "Invalid pin");
     jsvUnLock(r);
     return v;
   } else {
@@ -629,7 +629,7 @@ void jswrap_io_shiftOut(JsVar *pins, JsVar *options, JsVar *data) {
     jsvObjectIteratorNew(&it, pins);
     while (jsvObjectIteratorHasValue(&it)) {
       if (d.cnt>=jswrap_io_shiftOutDataMax) {
-        jsExceptionHere(JSET_ERROR, "Too many pins! %d Maximum.", jswrap_io_shiftOutDataMax);
+        jsExceptionHere(JSET_ERROR, "Too many pins! %d Maximum", jswrap_io_shiftOutDataMax);
         return;
       }
       d.pins[d.cnt] = jshGetPinFromVarAndUnLock(jsvObjectIteratorGetValue(&it));
@@ -772,12 +772,12 @@ JsVar *jswrap_interface_setWatch(
   }
   if (jsvIsObject(repeatOrObject)) {
     JsVar *v;
-    v = jsvObjectGetChild(repeatOrObject, "repeat", 0);
+    v = jsvObjectGetChildIfExists(repeatOrObject, "repeat");
     if (v) repeat = jsvGetBoolAndUnLock(v);
-    v = jsvObjectGetChild(repeatOrObject, "debounce", 0);
+    v = jsvObjectGetChildIfExists(repeatOrObject, "debounce");
     if (v) debounce = jsvGetFloatAndUnLock(v);
     if (isnan(debounce) || debounce<0) debounce=0;
-    v = jsvObjectGetChild(repeatOrObject, "edge", 0);
+    v = jsvObjectGetChildIfExists(repeatOrObject, "edge");
     if (jsvIsUndefined(v)) {
       // do nothing - use default
     } else if (jsvIsNumeric(v)) {
@@ -796,9 +796,9 @@ JsVar *jswrap_interface_setWatch(
       jsExceptionHere(JSET_TYPEERROR, "'edge' in setWatch should be 1, -1, 0, 'rising', 'falling' or 'both'");
       return 0;
     }
-    isIRQ = jsvGetBoolAndUnLock(jsvObjectGetChild(repeatOrObject, "irq", 0));
-    isHighSpeed = jsvGetBoolAndUnLock(jsvObjectGetChild(repeatOrObject, "hispeed", 0));
-    dataPin = jshGetPinFromVarAndUnLock(jsvObjectGetChild(repeatOrObject, "data", 0));
+    isIRQ = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "irq"));
+    isHighSpeed = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "hispeed"));
+    dataPin = jshGetPinFromVarAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "data"));
   } else
     repeat = jsvGetBool(repeatOrObject);
 
@@ -856,9 +856,12 @@ JsVar *jswrap_interface_setWatch(
   "name" : "clearWatch",
   "generate" : "jswrap_interface_clearWatch",
   "params" : [
-    ["id","JsVarArray","The id returned by a previous call to setWatch. **Only one argument is allowed.**"]
+    ["id","JsVarArray","The id returned by a previous call to setWatch. **Only one argument is allowed.** (or pass nothing to clear all watches)"]
   ],
-  "typescript" : "declare function clearWatch(id: number): void;"
+  "typescript" : [
+    "declare function clearWatch(id: number): void;",
+    "declare function clearWatch(): void;"
+  ]
 }
 Clear the Watch that was created with setWatch. If no parameter is supplied, all watches will be removed.
 
@@ -871,7 +874,7 @@ void jswrap_interface_clearWatch(JsVar *idVarArr) {
     jsvObjectIteratorNew(&it, watchArrayPtr);
     while (jsvObjectIteratorHasValue(&it)) {
       JsVar *watchPtr = jsvObjectIteratorGetValue(&it);
-      JsVar *watchPin = jsvObjectGetChild(watchPtr, "pin", 0);
+      JsVar *watchPin = jsvObjectGetChildIfExists(watchPtr, "pin");
       Pin pin = jshGetPinFromVar(watchPin);
       if (!jshGetPinShouldStayWatched(pin))
         jshPinWatch(pin, false, JSPW_NONE);
@@ -885,7 +888,7 @@ void jswrap_interface_clearWatch(JsVar *idVarArr) {
   } else {
     JsVar *idVar = jsvGetArrayItem(idVarArr, 0);
     if (jsvIsUndefined(idVar)) {
-      jsExceptionHere(JSET_ERROR, "clearWatch(undefined) not allowed. Use clearWatch() instead.");
+      jsExceptionHere(JSET_ERROR, "clearWatch(undefined) not allowed. Use clearWatch() instead");
       return;
     }
     JsVar *watchArrayPtr = jsvLock(watchArray);
@@ -893,7 +896,7 @@ void jswrap_interface_clearWatch(JsVar *idVarArr) {
     jsvUnLock(watchArrayPtr);
     if (watchNamePtr) { // child is a 'name'
       JsVar *watchPtr = jsvSkipName(watchNamePtr);
-      Pin pin = jshGetPinFromVarAndUnLock(jsvObjectGetChild(watchPtr, "pin", 0));
+      Pin pin = jshGetPinFromVarAndUnLock(jsvObjectGetChildIfExists(watchPtr, "pin"));
       jsvUnLock(watchPtr);
 
       JsVar *watchArrayPtr = jsvLock(watchArray);
