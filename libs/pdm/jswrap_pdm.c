@@ -29,7 +29,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 int16_t* jswrap_pdm_bufferA_data = NULL;
 int16_t* jswrap_pdm_bufferB_data = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
-double jswrap_pdm_rms_value = 0.0;
+float jswrap_pdm_rms_value = 0.0f;
 nrf_pdm_mode_t jswrap_pdm_mode = (nrf_pdm_mode_t)1;       ///< Interface operation mode. Default to mono
 nrf_pdm_edge_t jswrap_pdm_edge = (nrf_pdm_edge_t)PDM_CONFIG_EDGE;       ///< Sampling mode.
 uint8_t           jswrap_pdm_pin_clk;                                   // user defined clock pin
@@ -88,11 +88,11 @@ void jswrap_pdm_log_error( ret_code_t err ) {
 static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   uint16_t* samples = (uint16_t*)buffer;
   // We got samples
-  double sum = 0;
+  long long sum = 0;
   for(int i=0; i < length; i++) {
-    sum += (double)((float)samples[i]*(float)samples[i]);
+    sum += (long long)samples[i]*(long long)samples[i];
   }
-  jswrap_pdm_rms_value = sqrt(sum / (double)length);
+  jswrap_pdm_rms_value = (float)sum / (float)length;
 }
 
 /*JSON{
@@ -245,7 +245,7 @@ void jswrap_pdm_start( ) {
   "generate" : "jswrap_pdm_rms",
   "return" : ["float", "RMS value" ]
 } */
-double jswrap_pdm_rms() {
+JsVarFloat jswrap_pdm_rms() {
   return jswrap_pdm_rms_value;
 }
 
