@@ -88,7 +88,8 @@ void jswrap_pdm_log_error( ret_code_t err ) {
 
 int16_t* jswrap_pdm_last_buffer = NULL;
 
-static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {  
+static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {  
+  int16_t* samples = (int16_t*)buffer;
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
@@ -103,7 +104,7 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
     } else {
       args[0] = jswrap_pdm_bufferB;
     }
-    args[1] = jsvNewFromFloat(sum);
+    args[1] = jsvNewFromFloat(squared_samples);
     jsvUnLock(jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args));
     jsvUnLockMany(2, args);
     jsvUnLock(jswrap_pdm_samples_callback);
