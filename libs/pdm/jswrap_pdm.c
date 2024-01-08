@@ -92,12 +92,19 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
-    // find original Js objects for this array adress
-    if(jswrap_pdm_bufferA_data == samples) {
-      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferA);
-    } else {
-      jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 1, &jswrap_pdm_bufferB);
+    float squared_samples = 0.0f;
+    for(int i=0; i < length; i++) {
+      squared_samples += (float)(samples[i]) * (float)(samples[i]);
     }
+    // find original Js objects for this array adress
+    JsVar *args[2];
+    if(jswrap_pdm_bufferA_data == samples) {
+      args[0] = jswrap_pdm_bufferA;
+    } else {
+      args[0] = jswrap_pdm_bufferB;
+    }
+    args[1] = jsvNewFromFloat(sum);
+    jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args);
   }
 }
 
