@@ -24,8 +24,6 @@
 #include <math.h>
 
 // Double buffering for not missing samples
-JsVar* jswrap_pdm_bufferA = NULL;
-JsVar* jswrap_pdm_bufferB = NULL;
 int16_t* jswrap_pdm_bufferA_data = NULL;
 int16_t* jswrap_pdm_bufferB_data = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
@@ -200,18 +198,14 @@ void jswrap_pdm_init(int cache_size) {
     jsError("Invalid cache size, must be between 1 and 16384.\r\n");
     return;
   }
-  jswrap_pdm_bufferA = jsvNewArrayBufferWithPtr(cache_size*2, (char**)&jswrap_pdm_bufferA_data);
-  if (!jswrap_pdm_bufferA) {
-    jsError("Not enough free memory for this buffer size.\r\n");
-    jsvUnLock(jswrap_pdm_bufferA);
-    return;
+  if(jswrap_pdm_bufferA_data) {
+    free(jswrap_pdm_bufferA_data);
   }
-  jswrap_pdm_bufferB = jsvNewArrayBufferWithPtr(cache_size*2, (char**)&jswrap_pdm_bufferB_data);
-  if (!jswrap_pdm_bufferB) {
-    jsError("Not enough free memory for this buffer size.\r\n");
-    jsvUnLock(jswrap_pdm_bufferB);
-    return;
+  if(jswrap_pdm_bufferB_data) {
+    free(jswrap_pdm_bufferB_data);
   }
+  jswrap_pdm_bufferA_data = malloc(sizeof(int16_t) * cache_size);
+  jswrap_pdm_bufferB_data = malloc(sizeof(int16_t) * cache_size);
   jswrap_pdm_buffer_length = (uint16_t)cache_size;
 
   nrf_drv_pdm_config_t jswrap_pdm_config = NRF_DRV_PDM_DEFAULT_CONFIG(jswrap_pdm_pin_clk, jswrap_pdm_pin_din,
@@ -269,10 +263,8 @@ void jswrap_pdm_stop( ) {
 } */
 void jswrap_pdm_uninit( ) {
   nrf_drv_pdm_uninit();
-  jsvUnRef(jswrap_pdm_bufferA);
-  jsvUnRef(jswrap_pdm_bufferB);
-  jswrap_pdm_bufferA = NULL;
-  jswrap_pdm_bufferB = NULL;
+  free(jswrap_pdm_bufferA_data);
+  free(jswrap_pdm_bufferB_data);
   jswrap_pdm_bufferA_data = NULL;
   jswrap_pdm_bufferB_data = NULL;
   jswrap_pdm_buffer_length = 0;
