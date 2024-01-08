@@ -104,7 +104,9 @@ static void jswrap_pdm_handler( uint16_t * samples, uint16_t length) {
       args[0] = jswrap_pdm_bufferB;
     }
     args[1] = jsvNewFromFloat(sum);
-    jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args);
+    jsvUnLock(jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args));
+    jsvUnLockMany(2, args);
+    jsvUnLock(jswrap_pdm_samples_callback);
   }
 }
 
