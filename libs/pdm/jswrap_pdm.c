@@ -88,11 +88,12 @@ void jswrap_pdm_log_error( ret_code_t err ) {
 static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   uint16_t* samples = (uint16_t*)buffer;
   // We got samples
-  JsVarFloat sum = 0.0;
+  float sum = 0.0;
   for(int i=0; i < length; i++) {
-    sum += (JsVarFloat)(samples[i])*(JsVarFloat)(samples[i]);
+    float sample = (float)(samples[i]);
+    sum += sample*sample;
   }
-  jswrap_pdm_rms_value = (JsVarFloat)sum / (JsVarFloat)length;
+  jswrap_pdm_rms_value = sample / (float)length;
 }
 
 /*JSON{
