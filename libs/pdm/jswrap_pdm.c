@@ -90,7 +90,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   // We got samples
   JsVarFloat sum = 0.0;
   for(int i=0; i < length; i++) {
-    sum += (JsVarFloat)samples[i]*(JsVarFloat)samples[i];
+    sum += (JsVarFloat)(samples[i])*(JsVarFloat)(samples[i]);
   }
   jswrap_pdm_rms_value = (JsVarFloat)sum / (JsVarFloat)length;
 }
