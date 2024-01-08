@@ -29,7 +29,7 @@ JsVar* jswrap_pdm_bufferB = NULL;
 int16_t* jswrap_pdm_bufferA_data = NULL;
 int16_t* jswrap_pdm_bufferB_data = NULL;
 uint16_t jswrap_pdm_buffer_length = 0;                                  ///< Length of a single buffer (in 16-bit words).
-JsVarFloat jswrap_pdm_rms_value = 0.0;
+float jswrap_pdm_rms_value = 0.0f;
 nrf_pdm_mode_t jswrap_pdm_mode = (nrf_pdm_mode_t)1;       ///< Interface operation mode. Default to mono
 nrf_pdm_edge_t jswrap_pdm_edge = (nrf_pdm_edge_t)PDM_CONFIG_EDGE;       ///< Sampling mode.
 uint8_t           jswrap_pdm_pin_clk;                                   // user defined clock pin
@@ -93,7 +93,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
     float sample = (float)(samples[i]);
     sum += sample*sample;
   }
-  jswrap_pdm_rms_value = sample / (float)length;
+  jswrap_pdm_rms_value = sum / (float)length;
 }
 
 /*JSON{
@@ -246,7 +246,7 @@ void jswrap_pdm_start( ) {
   "generate" : "jswrap_pdm_rms",
   "return" : ["float", "RMS value" ]
 } */
-JsVarFloat jswrap_pdm_rms() {
+float jswrap_pdm_rms() {
   return jswrap_pdm_rms_value;
 }
 
