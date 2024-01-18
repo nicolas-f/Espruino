@@ -37,6 +37,26 @@ nrf_pdm_gain_t jswrap_pdm_gain_l= NRF_PDM_GAIN_DEFAULT;                 ///< Lef
 nrf_pdm_gain_t jswrap_pdm_gain_r = NRF_PDM_GAIN_DEFAULT;                ///< Right channel gain.
 uint8_t        jswrap_pdm_interrupt_priority = PDM_CONFIG_IRQ_PRIORITY; ///< Interrupt priority.
 #define JSWRAP_PDM_FILTER_ORDER 7
+const float_t FILTER_15625_NUM[] IN_FLASH_MEMORY = {0.536908f,-1.073816f,-0.536908f,2.147633f,-0.536908f,-1.073816f,0.536908f};
+const float_t FILTER_15625_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.841551f,2.143248f,0.528427f,-0.996429f,0.042748f,0.123558f};
+const float_t FILTER_16125_NUM[] IN_FLASH_MEMORY = {0.529694f,-1.059387f,-0.529694f,2.118774f,-0.529694f,-1.059387f,0.529694f};
+const float_t FILTER_16125_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.876451f,2.246874f,0.430778f,-0.978683f,0.060160f,0.117324f};
+const float_t FILTER_16667_NUM[] IN_FLASH_MEMORY = {0.521916f,-1.043833f,-0.521916f,2.087665f,-0.521916f,-1.043833f,0.521916f};
+const float_t FILTER_16667_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.913209f,2.357231f,0.324500f,-0.956804f,0.077554f,0.110728f};
+const float_t FILTER_19230_NUM[] IN_FLASH_MEMORY = {0.486127f,-0.972253f,-0.486127f,1.944506f,-0.486127f,-0.972253f,0.486127f};
+const float_t FILTER_19230_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.073682f,2.853185f,-0.180343f,-0.821755f,0.140404f,0.082191f};
+const float_t FILTER_20000_NUM[] IN_FLASH_MEMORY = {0.475780f,-0.951561f,-0.475780f,1.903122f,-0.475780f,-0.951561f,0.475780f};
+const float_t FILTER_20000_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.118098f,2.994414f,-0.331733f,-0.772673f,0.153549f,0.074541f};
+const float_t FILTER_20833_NUM[] IN_FLASH_MEMORY = {0.464830f,-0.929660f,-0.464830f,1.859320f,-0.464830f,-0.929660f,0.464830f};
+const float_t FILTER_20833_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.164411f,3.143447f,-0.494923f,-0.715944f,0.165071f,0.066760f};
+const float_t FILTER_31250_NUM[] IN_FLASH_MEMORY = {0.350218f,-0.700437f,-0.350218f,1.400874f,-0.350218f,-0.700437f,0.350218f};
+const float_t FILTER_31250_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.629240f,4.733415f,-2.428182f,0.181725f,0.133668f,0.008613f};
+const float_t FILTER_41667_NUM[] IN_FLASH_MEMORY = {0.270584f,-0.541169f,-0.270584f,1.082338f,-0.270584f,-0.541169f,0.270584f};
+const float_t FILTER_41667_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.956266f,5.946282f,-4.100522f,1.188815f,-0.079852f,0.001543f};
+const float_t FILTER_50000_NUM[] IN_FLASH_MEMORY = {0.224311f,-0.448623f,-0.224311f,0.897245f,-0.224311f,-0.448623f,0.224311f};
+const float_t FILTER_50000_DEN[] IN_FLASH_MEMORY = {1.000000f,-4.157553f,6.728306f,-5.253969f,1.968919f,-0.301380f,0.015678f};
+const float_t FILTER_62500_NUM[] IN_FLASH_MEMORY = {0.173995f,-0.347990f,-0.173995f,0.695980f,-0.173995f,-0.347990f,0.173995f};
+const float_t FILTER_62500_DEN[] IN_FLASH_MEMORY = {1.000000f,-4.393512f,7.677703f,-6.724061f,3.041738f,-0.654542f,0.052674f};
 float_t jswrap_pdm_w_numerator[JSWRAP_PDM_FILTER_ORDER]; // weighting filter numerator
 float_t jswrap_pdm_w_denominator[JSWRAP_PDM_FILTER_ORDER]; // weigting filter denominator
 float_t jswrap_pdm_delay1[JSWRAP_PDM_FILTER_ORDER]; // weighting filter numerator
@@ -186,73 +206,53 @@ void jswrap_pdm_setup(JsVar *options) {
   {
     case 15625:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1000K;
-      float_t num[] = {0.536908f,-1.073816f,-0.536908f,2.147633f,-0.536908f,-1.073816f,0.536908f};
-      float_t dem[] = {1.000000f,-2.841551f,2.143248f,0.528427f,-0.996429f,0.042748f,0.123558f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_15625_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_15625_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 16125:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1032K;
-      float_t num[] = {0.529694f,-1.059387f,-0.529694f,2.118774f,-0.529694f,-1.059387f,0.529694f};
-      float_t dem[] = {1.000000f,-2.876451f,2.246874f,0.430778f,-0.978683f,0.060160f,0.117324f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_16125_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_16125_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 16667:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1067K;
-      float_t num[] = {0.521916f,-1.043833f,-0.521916f,2.087665f,-0.521916f,-1.043833f,0.521916f};
-      float_t dem[] = {1.000000f,-2.913209f,2.357231f,0.324500f,-0.956804f,0.077554f,0.110728f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_16667_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_16667_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 19230:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1231K;
-      float_t num[] = {0.486127f,-0.972253f,-0.486127f,1.944506f,-0.486127f,-0.972253f,0.486127f};
-      float_t dem[] = {1.000000f,-3.073682f,2.853185f,-0.180343f,-0.821755f,0.140404f,0.082191f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_19230_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_19230_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 20000:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1280K;
-      float_t num[] = {0.475780f,-0.951561f,-0.475780f,1.903122f,-0.475780f,-0.951561f,0.475780f};
-      float_t dem[] = {1.000000f,-3.118098f,2.994414f,-0.331733f,-0.772673f,0.153549f,0.074541f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_20000_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_20000_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 20833:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1333K;
-      float_t num[] = {0.464830f,-0.929660f,-0.464830f,1.859320f,-0.464830f,-0.929660f,0.464830f};
-      float_t dem[] = {1.000000f,-3.164411f,3.143447f,-0.494923f,-0.715944f,0.165071f,0.066760f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_20833_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_20833_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 31250:
       jswrap_pdm_frequency = NRF_PDM_FREQ_2000K;
-      float_t num[] = {0.350218f,-0.700437f,-0.350218f,1.400874f,-0.350218f,-0.700437f,0.350218f};
-      float_t dem[] = {1.000000f,-3.629240f,4.733415f,-2.428182f,0.181725f,0.133668f,0.008613f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_31250_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_31250_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 41667:
       jswrap_pdm_frequency = NRF_PDM_FREQ_2667K;
-      float_t num[] = {0.270584f,-0.541169f,-0.270584f,1.082338f,-0.270584f,-0.541169f,0.270584f};
-      float_t dem[] = {1.000000f,-3.956266f,5.946282f,-4.100522f,1.188815f,-0.079852f,0.001543f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_41667_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_41667_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 50000:
       jswrap_pdm_frequency = NRF_PDM_FREQ_3200K;
-      float_t num[] = {0.224311f,-0.448623f,-0.224311f,0.897245f,-0.224311f,-0.448623f,0.224311f};
-      float_t dem[] = {1.000000f,-4.157553f,6.728306f,-5.253969f,1.968919f,-0.301380f,0.015678f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_50000_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_50000_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 62500:
       jswrap_pdm_frequency = NRF_PDM_FREQ_4000K;
-      float_t num[] = {0.173995f,-0.347990f,-0.173995f,0.695980f,-0.173995f,-0.347990f,0.173995f};
-      float_t dem[] = {1.000000f,-4.393512f,7.677703f,-6.724061f,3.041738f,-0.654542f,0.052674f};
-      memcpy(jswrap_pdm_w_numerator, num, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, dem, sizeof(jswrap_pdm_w_denominator));
+      memcpy(jswrap_pdm_w_numerator, FILTER_62500_NUM, sizeof(jswrap_pdm_w_numerator));
+      memcpy(jswrap_pdm_w_denominator, FILTER_62500_DEN, sizeof(jswrap_pdm_w_denominator));
       break;  
     default:
       break;
