@@ -141,7 +141,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         jswrap_pdm_filter_circular_index++;
         if(jswrap_pdm_filter_circular_index == JSWRAP_PDM_FILTER_ORDER)
             jswrap_pdm_filter_circular_index = 0;
-        samples[i] = input_acc
+        samples[i] = input_acc;
       }
     }
     // find original Js objects for this array address
