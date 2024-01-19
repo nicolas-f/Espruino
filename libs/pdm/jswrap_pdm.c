@@ -303,18 +303,6 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
     return;
   }
-  if (jsvIsArrayBuffer(filter_num) && !jsvIsArrayBuffer(filter_den)) {
-    jsExceptionHere(JSET_ERROR, "filter_den must be provided if filter_num is specified");
-    return;
-  }
-  if (!jsvIsArrayBuffer(filter_num) && jsvIsArrayBuffer(filter_den)) {
-    jsExceptionHere(JSET_ERROR, "filter_num must be provided if filter_den is specified");
-    return;
-  }
-  if (jsvIsArrayBuffer(filter_num) && jsvIsArrayBuffer(filter_buf)) {
-    jsExceptionHere(JSET_ERROR, "filter_buf must be provided if filter_num and filter_den is specified");
-    return;
-  }
 
   size_t buffer_length = (int)jsvGetLength(buffer_a);
   
