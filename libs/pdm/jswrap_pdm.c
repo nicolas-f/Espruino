@@ -36,33 +36,11 @@ nrf_pdm_freq_t    jswrap_pdm_frequency = PDM_PDMCLKCTRL_FREQ_Default;   // sampl
 nrf_pdm_gain_t jswrap_pdm_gain_l= NRF_PDM_GAIN_DEFAULT;                 ///< Left channel gain.
 nrf_pdm_gain_t jswrap_pdm_gain_r = NRF_PDM_GAIN_DEFAULT;                ///< Right channel gain.
 uint8_t        jswrap_pdm_interrupt_priority = PDM_CONFIG_IRQ_PRIORITY; ///< Interrupt priority.
-#define JSWRAP_PDM_FILTER_ORDER 7
-const float_t FILTER_15625_NUM[] IN_FLASH_MEMORY = {0.536908f,-1.073816f,-0.536908f,2.147633f,-0.536908f,-1.073816f,0.536908f};
-const float_t FILTER_15625_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.841551f,2.143248f,0.528427f,-0.996429f,0.042748f,0.123558f};
-const float_t FILTER_16125_NUM[] IN_FLASH_MEMORY = {0.529694f,-1.059387f,-0.529694f,2.118774f,-0.529694f,-1.059387f,0.529694f};
-const float_t FILTER_16125_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.876451f,2.246874f,0.430778f,-0.978683f,0.060160f,0.117324f};
-const float_t FILTER_16667_NUM[] IN_FLASH_MEMORY = {0.521916f,-1.043833f,-0.521916f,2.087665f,-0.521916f,-1.043833f,0.521916f};
-const float_t FILTER_16667_DEN[] IN_FLASH_MEMORY = {1.000000f,-2.913209f,2.357231f,0.324500f,-0.956804f,0.077554f,0.110728f};
-const float_t FILTER_19230_NUM[] IN_FLASH_MEMORY = {0.486127f,-0.972253f,-0.486127f,1.944506f,-0.486127f,-0.972253f,0.486127f};
-const float_t FILTER_19230_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.073682f,2.853185f,-0.180343f,-0.821755f,0.140404f,0.082191f};
-const float_t FILTER_20000_NUM[] IN_FLASH_MEMORY = {0.475780f,-0.951561f,-0.475780f,1.903122f,-0.475780f,-0.951561f,0.475780f};
-const float_t FILTER_20000_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.118098f,2.994414f,-0.331733f,-0.772673f,0.153549f,0.074541f};
-const float_t FILTER_20833_NUM[] IN_FLASH_MEMORY = {0.464830f,-0.929660f,-0.464830f,1.859320f,-0.464830f,-0.929660f,0.464830f};
-const float_t FILTER_20833_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.164411f,3.143447f,-0.494923f,-0.715944f,0.165071f,0.066760f};
-const float_t FILTER_31250_NUM[] IN_FLASH_MEMORY = {0.350218f,-0.700437f,-0.350218f,1.400874f,-0.350218f,-0.700437f,0.350218f};
-const float_t FILTER_31250_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.629240f,4.733415f,-2.428182f,0.181725f,0.133668f,0.008613f};
-const float_t FILTER_41667_NUM[] IN_FLASH_MEMORY = {0.270584f,-0.541169f,-0.270584f,1.082338f,-0.270584f,-0.541169f,0.270584f};
-const float_t FILTER_41667_DEN[] IN_FLASH_MEMORY = {1.000000f,-3.956266f,5.946282f,-4.100522f,1.188815f,-0.079852f,0.001543f};
-const float_t FILTER_50000_NUM[] IN_FLASH_MEMORY = {0.224311f,-0.448623f,-0.224311f,0.897245f,-0.224311f,-0.448623f,0.224311f};
-const float_t FILTER_50000_DEN[] IN_FLASH_MEMORY = {1.000000f,-4.157553f,6.728306f,-5.253969f,1.968919f,-0.301380f,0.015678f};
-const float_t FILTER_62500_NUM[] IN_FLASH_MEMORY = {0.173995f,-0.347990f,-0.173995f,0.695980f,-0.173995f,-0.347990f,0.173995f};
-const float_t FILTER_62500_DEN[] IN_FLASH_MEMORY = {1.000000f,-4.393512f,7.677703f,-6.724061f,3.041738f,-0.654542f,0.052674f};
-float_t jswrap_pdm_w_numerator[JSWRAP_PDM_FILTER_ORDER]; // weighting filter numerator
-float_t jswrap_pdm_w_denominator[JSWRAP_PDM_FILTER_ORDER]; // weigting filter denominator
-float_t jswrap_pdm_delay1[JSWRAP_PDM_FILTER_ORDER]; // weighting filter numerator
-float_t jswrap_pdm_delay2[JSWRAP_PDM_FILTER_ORDER]; // weigting filter denominator
-int8_t jswrap_pdm_weighting = 0;
-int32_t jswrap_pdm_filter_circular_index = 0;
+float_t* jswrap_pdm_w_numerator = NULL;
+float_t* jswrap_pdm_w_denominator = NULL;
+float_t* jswrap_pdm_delay_buffer = NULL;
+uint8_t jswrap_pdm_filter_order = 0;
+uint8_t jswrap_pdm_filter_circular_index = 0;
 
 
 
@@ -126,20 +104,20 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
     for(int i=0; i < length; i++) {
       squared_samples += (float)(samples[i]) * (float)(samples[i]);
     }
-    if(jswrap_pdm_weighting > 0) { // Apply weighting filter
+    if(jswrap_pdm_filter_order > 0) { // Apply signal filter
       float_t input_acc = 0;
       for(int i=0; i < length; i++) {
         input_acc = 0;
-        jswrap_pdm_delay2[jswrap_pdm_filter_circular_index] = samples[i];
-        for(int j=0; j < JSWRAP_PDM_FILTER_ORDER; j++) {
-          input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay2[(jswrap_pdm_filter_circular_index - j) % JSWRAP_PDM_FILTER_ORDER];
+        jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+jswrap_pdm_filter_circular_index] = samples[i];
+        for(int j=0; j < jswrap_pdm_filter_order; j++) {
+          input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+(jswrap_pdm_filter_circular_index - j) % JSWRAP_PDM_FILTER_ORDER];
           if(j==0) continue;
-          input_acc -= jswrap_pdm_w_denominator[j] * jswrap_pdm_delay1[(JSWRAP_PDM_FILTER_ORDER - j + jswrap_pdm_filter_circular_index) % JSWRAP_PDM_FILTER_ORDER];
+          input_acc -= jswrap_pdm_w_denominator[j] * jswrap_pdm_delay_buffer[(JSWRAP_PDM_FILTER_ORDER - j + jswrap_pdm_filter_circular_index) % JSWRAP_PDM_FILTER_ORDER];
         }
         input_acc /= jswrap_pdm_w_denominator[0];
-        jswrap_pdm_delay1[jswrap_pdm_filter_circular_index] = input_acc;
+        jswrap_pdm_delay_buffer[jswrap_pdm_filter_circular_index] = input_acc;
         jswrap_pdm_filter_circular_index++;
-        if(jswrap_pdm_filter_circular_index == JSWRAP_PDM_FILTER_ORDER)
+        if(jswrap_pdm_filter_circular_index == jswrap_pdm_filter_order)
             jswrap_pdm_filter_circular_index = 0;
         samples[i] = input_acc;
       }
@@ -169,7 +147,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
 "name" : "setup",
 "generate" : "jswrap_pdm_setup",
 "params" : [
-  ["options","JsVar","Object `{clock: integer, din : integer, frequency: integer, lgain: float, rgain: float, mono: boolean, sampling_mode: integer, interrupt_priority: integer, weighting: integer}` Supported frequencies are 15625, 16125, 16667, 19230, 20000, 20833, 31250, 41667, 50000, 62500 Hz. Gain is expressed in dB and must be between -20;20. Signal weighting 0:Z 1:A"]
+  ["options","JsVar","Object `{clock: integer, din : integer, frequency: integer, lgain: float, rgain: float, mono: boolean, sampling_mode: integer, interrupt_priority: integer}` Supported frequencies are 15625, 16125, 16667, 19230, 20000, 20833, 31250, 41667, 50000, 62500 Hz. Gain is expressed in dB and must be between -20;20"]
 ]
 }*/
 void jswrap_pdm_setup(JsVar *options) {
@@ -198,61 +176,39 @@ void jswrap_pdm_setup(JsVar *options) {
     if (v) jswrap_pdm_edge = jsvGetIntegerAndUnLock(v);
     v = jsvObjectGetChild(options,"interrupt_priority", 0);
     if (v) jswrap_pdm_interrupt_priority = jsvGetIntegerAndUnLock(v);
-    v = jsvObjectGetChild(options,"weighting", 0);;
-    if (v) jswrap_pdm_weighting = jsvGetIntegerAndUnLock(v);
   }
   
   switch (frequency)
   {
     case 15625:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1000K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_15625_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_15625_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 16125:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1032K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_16125_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_16125_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 16667:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1067K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_16667_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_16667_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 19230:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1231K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_19230_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_19230_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 20000:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1280K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_20000_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_20000_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 20833:
       jswrap_pdm_frequency = NRF_PDM_FREQ_1333K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_20833_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_20833_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 31250:
       jswrap_pdm_frequency = NRF_PDM_FREQ_2000K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_31250_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_31250_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 41667:
       jswrap_pdm_frequency = NRF_PDM_FREQ_2667K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_41667_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_41667_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 50000:
       jswrap_pdm_frequency = NRF_PDM_FREQ_3200K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_50000_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_50000_DEN, sizeof(jswrap_pdm_w_denominator));
       break;
     case 62500:
       jswrap_pdm_frequency = NRF_PDM_FREQ_4000K;
-      memcpy(jswrap_pdm_w_numerator, FILTER_62500_NUM, sizeof(jswrap_pdm_w_numerator));
-      memcpy(jswrap_pdm_w_denominator, FILTER_62500_DEN, sizeof(jswrap_pdm_w_denominator));
       break;  
     default:
       break;
@@ -280,10 +236,13 @@ void jswrap_pdm_setup(JsVar *options) {
 "params" : [
   ["callback","JsVar","The function callback when samples are available"],
   ["buffer_a","JsVar","First samples buffer of type Int16Array"],
-  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"]
+  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"],
+  ["filter_num","JsVar","Optional FloatArray of filter numerator to apply to signal"],
+  ["filter_den","JsVar","Optional FloatArray of filter denominator to apply to signal"],
+  ["filter_buf","JsVar","Optional if num and den not provided, FloatArray buffer of size num+den"]
 ]
 }*/
-void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
+void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b, JsVar* filter_num, JsVar* filter_den,JsVar* filter_buf) {
 
   if (!jsvIsFunction(callback)) {
     jsExceptionHere(JSET_ERROR, "Function not supplied!");
@@ -307,6 +266,36 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
     return;
   }
+  if (jsvIsArrayBuffer(filter_num) && !jsvIsArrayBuffer(filter_den)) {
+    jsExceptionHere(JSET_ERROR, "filter_den must be provided if filter_num is specified");
+    return;
+  }
+  if (!jsvIsArrayBuffer(filter_num) && jsvIsArrayBuffer(filter_den)) {
+    jsExceptionHere(JSET_ERROR, "filter_num must be provided if filter_den is specified");
+    return;
+  }
+  if (jsvIsArrayBuffer(filter_num) && jsvIsArrayBuffer(filter_buf)) {
+    jsExceptionHere(JSET_ERROR, "filter_buf must be provided if filter_num and filter_den is specified");
+    return;
+  }
+
+
+  if (jsvIsArrayBuffer(filter_num)) {
+    jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
+    if(jswrap_pdm_filter_order != (uint8_t)jsvGetLength(filter_den)) {
+      jsExceptionHere(JSET_ERROR, "filter_num.length!=filter_den.length");
+      return;
+    }
+    if(jswrap_pdm_filter_order * 2 != (uint8_t)jsvGetLength(filter_buf)) {
+      jsExceptionHere(JSET_ERROR, "filter_num.length*2!=filter_buf.length");
+      return;
+    }
+    size_t sizeofar;
+    jswrap_pdm_w_numerator = (float_t *)jsvGetDataPointer(filter_num, &sizeofar);
+    jswrap_pdm_w_denominator = (float_t *)jsvGetDataPointer(filter_den, &sizeofar);
+    jswrap_pdm_delay_buffer = (float_t *)jsvGetDataPointer(filter_buf, &sizeofar);
+  }
+
   size_t buffer_length = (int)jsvGetLength(buffer_a);
   
   jswrap_pdm_bufferA = buffer_a;
@@ -328,6 +317,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 
 	ret_code_t err = nrf_drv_pdm_init(&jswrap_pdm_config, jswrap_pdm_handler);
   jswrap_pdm_log_error(err); // log error if there is one
+
 }
 
 /*JSON{
@@ -361,6 +351,12 @@ void jswrap_pdm_stop( ) {
 } */
 void jswrap_pdm_uninit( ) {
   nrf_drv_pdm_uninit();
+  jsvUnLock(jswrap_pdm_bufferA);
+  jsvUnLock(jswrap_pdm_bufferB);
+  jsvUnLock(jswrap_pdm_samples_callback);
+  jsvUnLock(jswrap_pdm_bufferA);
+  jsvUnLock(jswrap_pdm_bufferB);
+  jsvUnLock(jswrap_pdm_bufferB);
   jswrap_pdm_bufferA = NULL;
   jswrap_pdm_bufferB = NULL;
   jswrap_pdm_bufferA_data = NULL;
