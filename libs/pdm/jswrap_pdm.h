@@ -17,6 +17,8 @@
 
 void jswrap_pdm_setup(JsVar *options);
 
+void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_buf);
+
 void jswrap_pdm_init(JsVar *callback, JsVar* buffer_a, JsVar* buffer_b);
 
 void jswrap_pdm_start( );

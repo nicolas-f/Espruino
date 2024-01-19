@@ -231,15 +231,54 @@ void jswrap_pdm_setup(JsVar *options) {
 /*JSON{
 "type" : "staticmethod",
 "class" : "Pdm",
+"name" : "filter_init",
+"generate" : "jswrap_pdm_filter_init",
+"params" : [
+  ["filter_num","JsVar","Optional FloatArray of filter numerator to apply to signal"],
+  ["filter_den","JsVar","Optional FloatArray of filter denominator to apply to signal"],
+  ["filter_buf","JsVar","Optional if num and den not provided, FloatArray buffer of size num+den"]
+]
+}*/
+void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_buf) {
+  if (!jsvIsArrayBuffer(filter_den)) {
+    jsExceptionHere(JSET_ERROR, "filter_den must be provided");
+    return;
+  }
+  if (!jsvIsArrayBuffer(filter_num)) {
+    jsExceptionHere(JSET_ERROR, "filter_num must be provided");
+    return;
+  }
+  if (!jsvIsArrayBuffer(filter_buf)) {
+    jsExceptionHere(JSET_ERROR, "filter_buf must be provided");
+    return;
+  }
+  jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
+  if(jswrap_pdm_filter_order != (uint8_t)jsvGetLength(filter_den)) {
+    jsExceptionHere(JSET_ERROR, "filter_num.length!=filter_den.length");
+    return;
+  }
+  if(jswrap_pdm_filter_order * 2 != (uint8_t)jsvGetLength(filter_buf)) {
+    jsExceptionHere(JSET_ERROR, "filter_num.length*2!=filter_buf.length");
+    return;
+  }
+  jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
+  size_t sizeofar;
+  jswrap_pdm_w_numerator = (float_t *)jsvGetDataPointer(filter_num, &sizeofar);
+  jswrap_pdm_w_denominator = (float_t *)jsvGetDataPointer(filter_den, &sizeofar);
+  jswrap_pdm_delay_buffer = (float_t *)jsvGetDataPointer(filter_buf, &sizeofar);  
+}
+
+
+
+/*JSON{
+"type" : "staticmethod",
+"class" : "Pdm",
 "name" : "init",
 "generate" : "jswrap_pdm_init",
 "params" : [
   ["callback","JsVar","The function callback when samples are available"],
   ["buffer_a","JsVar","First samples buffer of type Int16Array"],
-  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"],
-  ["filter_num","JsVar","Optional FloatArray of filter numerator to apply to signal"],
-  ["filter_den","JsVar","Optional FloatArray of filter denominator to apply to signal"],
-  ["filter_buf","JsVar","Optional if num and den not provided, FloatArray buffer of size num+den"]
+  ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"]
 ]
 }*/
 void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b, JsVar* filter_num, JsVar* filter_den,JsVar* filter_buf) {
@@ -277,23 +316,6 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b, JsVar* f
   if (jsvIsArrayBuffer(filter_num) && jsvIsArrayBuffer(filter_buf)) {
     jsExceptionHere(JSET_ERROR, "filter_buf must be provided if filter_num and filter_den is specified");
     return;
-  }
-
-
-  if (jsvIsArrayBuffer(filter_num)) {
-    jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
-    if(jswrap_pdm_filter_order != (uint8_t)jsvGetLength(filter_den)) {
-      jsExceptionHere(JSET_ERROR, "filter_num.length!=filter_den.length");
-      return;
-    }
-    if(jswrap_pdm_filter_order * 2 != (uint8_t)jsvGetLength(filter_buf)) {
-      jsExceptionHere(JSET_ERROR, "filter_num.length*2!=filter_buf.length");
-      return;
-    }
-    size_t sizeofar;
-    jswrap_pdm_w_numerator = (float_t *)jsvGetDataPointer(filter_num, &sizeofar);
-    jswrap_pdm_w_denominator = (float_t *)jsvGetDataPointer(filter_den, &sizeofar);
-    jswrap_pdm_delay_buffer = (float_t *)jsvGetDataPointer(filter_buf, &sizeofar);
   }
 
   size_t buffer_length = (int)jsvGetLength(buffer_a);
@@ -354,13 +376,14 @@ void jswrap_pdm_uninit( ) {
   jsvUnLock(jswrap_pdm_bufferA);
   jsvUnLock(jswrap_pdm_bufferB);
   jsvUnLock(jswrap_pdm_samples_callback);
-  jsvUnLock(jswrap_pdm_bufferA);
-  jsvUnLock(jswrap_pdm_bufferB);
-  jsvUnLock(jswrap_pdm_bufferB);
   jswrap_pdm_bufferA = NULL;
   jswrap_pdm_bufferB = NULL;
   jswrap_pdm_bufferA_data = NULL;
   jswrap_pdm_bufferB_data = NULL;
   jswrap_pdm_buffer_length = 0;
   jswrap_pdm_samples_callback = NULL;
+  jswrap_pdm_filter_order = 0;
+  jswrap_pdm_w_numerator = NULL;
+  jswrap_pdm_w_denominator = NULL;
+  jswrap_pdm_delay_buffer = NULL;
 }
