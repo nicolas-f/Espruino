@@ -281,7 +281,7 @@ void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_
   ["buffer_b","JsVar","Second samples buffer (double buffering) must be same size and type than buffer A"]
 ]
 }*/
-void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b, JsVar* filter_num, JsVar* filter_den,JsVar* filter_buf) {
+void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 
   if (!jsvIsFunction(callback)) {
     jsExceptionHere(JSET_ERROR, "Function not supplied!");
