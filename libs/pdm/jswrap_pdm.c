@@ -110,9 +110,9 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         input_acc = 0;
         jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+jswrap_pdm_filter_circular_index] = samples[i];
         for(int j=0; j < jswrap_pdm_filter_order; j++) {
-          input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+(jswrap_pdm_filter_circular_index - j) % JSWRAP_PDM_FILTER_ORDER];
+          input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+(jswrap_pdm_filter_circular_index - j) % jswrap_pdm_filter_order];
           if(j==0) continue;
-          input_acc -= jswrap_pdm_w_denominator[j] * jswrap_pdm_delay_buffer[(JSWRAP_PDM_FILTER_ORDER - j + jswrap_pdm_filter_circular_index) % JSWRAP_PDM_FILTER_ORDER];
+          input_acc -= jswrap_pdm_w_denominator[j] * jswrap_pdm_delay_buffer[(jswrap_pdm_filter_order - j + jswrap_pdm_filter_circular_index) % jswrap_pdm_filter_order];
         }
         input_acc /= jswrap_pdm_w_denominator[0];
         jswrap_pdm_delay_buffer[jswrap_pdm_filter_circular_index] = input_acc;
@@ -155,8 +155,6 @@ void jswrap_pdm_setup(JsVar *options) {
   Pin pin_clock = JSH_PIN5;
   Pin pin_din = JSH_PIN6;
   int frequency = 16125;
-  int mode = 1; // 0 stereo 1 mono
-
 
   if (jsvIsObject(options)) {
     JsVar *v = jsvObjectGetChild(options,"clock", 0);
