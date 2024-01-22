@@ -131,7 +131,7 @@ JsVarFloat filter_samples(int16_t* samples, int32_t length) {
 void jswrap_pdm_run_filter(JsVar* samples) {
   size_t sizeofar;
   int16_t * data_samples = (int16_t *)jsvGetDataPointer(samples, &sizeofar);
-  filter_samples(data_samples, sizeofar);
+  filter_samples(data_samples, sizeofar / 2);
 }
 
 void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {  
@@ -263,6 +263,7 @@ void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_
     return;
   }
   jswrap_pdm_filter_order = jsvGetLength(filter_num);
+  jsiConsolePrintf("Filter order: %d", jswrap_pdm_filter_order);
   if(jswrap_pdm_filter_order != jsvGetLength(filter_den)) {
     jsExceptionHere(JSET_ERROR, "filter_num.length!=filter_den.length");
     return;
