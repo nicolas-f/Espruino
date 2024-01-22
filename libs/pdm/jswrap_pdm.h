@@ -23,6 +23,8 @@ void jswrap_pdm_init(JsVar *callback, JsVar* buffer_a, JsVar* buffer_b);
 
 void jswrap_pdm_start( );
 
+void jswrap_pdm_run_filter(JsVar* samples);
+
 void jswrap_pdm_stop( );
 
 void jswrap_pdm_uninit( );

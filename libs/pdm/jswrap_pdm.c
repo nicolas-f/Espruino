@@ -95,17 +95,13 @@ void jswrap_pdm_log_error( ret_code_t err ) {
 
 int16_t* jswrap_pdm_last_buffer = NULL;
 
-static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {  
-  int16_t* samples = (int16_t*)buffer;
-  // We got samples
-  // Send raw or do processing
-  if(jswrap_pdm_samples_callback) {
+JsVarFloat filter_samples(int16_t* samples, int32_t length) {
     JsVarFloat squared_samples = 0.0f;
     if(jswrap_pdm_filter_order > 0) { // Apply signal filter
       float_t input_acc = 0;
       for(JsVarInt i=0; i < length; i++) {
         input_acc = 0;
-        jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+jswrap_pdm_filter_circular_index] = samples[i];
+        jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+jswrap_pdm_filter_circular_index] = (float_t)samples[i];
         for(JsVarInt j=0; j < jswrap_pdm_filter_order; j++) {
           input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+(jswrap_pdm_filter_circular_index - j) % jswrap_pdm_filter_order];
           if(j==0) continue;
@@ -116,9 +112,36 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         jswrap_pdm_filter_circular_index++;
         if(jswrap_pdm_filter_circular_index == jswrap_pdm_filter_order)
             jswrap_pdm_filter_circular_index = 0;
-        samples[i] = (int16_t)MIN(INT16_MAX, (INT16_MIN, input_acc));
+        samples[i] = (int16_t)MIN(INT16_MAX, MAX(INT16_MIN, input_acc));
         squared_samples += input_acc * input_acc;
       }
+    }
+    return squared_samples;
+}
+
+/*JSON{
+"type" : "staticmethod",
+"class" : "Pdm",
+"name" : "run_filter",
+"generate" : "jswrap_pdm_run_filter",
+"params" : [
+  ["samples","JsVar","Int16Array"]
+]
+}*/
+void jswrap_pdm_run_filter(JsVar* samples) {
+  size_t sizeofar;
+  int16_t * data_samples = (int16_t *)jsvGetDataPointer(samples, &sizeofar);
+  filter_samples(data_samples, sizeofar);
+}
+
+void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {  
+  int16_t* samples = (int16_t*)buffer;
+  // We got samples
+  // Send raw or do processing
+  if(jswrap_pdm_samples_callback) {
+    JsVarFloat squared_samples = 0.0f;
+    if(jswrap_pdm_filter_order > 0) { // Apply signal filter
+      squared_samples = filter_samples(samples, (int32_t)length);      
     } else {
       for(int i=0; i < length; i++) {
         squared_samples += (float)(samples[i]) * (float)(samples[i]);
