@@ -100,7 +100,9 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
+    JsVarFloat squared_samples = 0.0f;
     if(jswrap_pdm_filter_order > 0) { // Apply signal filter
+      JsSysTime start = jshGetSystemTime();
       float_t input_acc = 0;
       for(int i=0; i < length; i++) {
         input_acc = 0;
@@ -116,11 +118,13 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         if(jswrap_pdm_filter_circular_index == jswrap_pdm_filter_order)
             jswrap_pdm_filter_circular_index = 0;
         samples[i] = input_acc;
+        squared_samples += input_acc * input_acc;
       }
-    }
-    float squared_samples = 0.0f;
-    for(int i=0; i < length; i++) {
-      squared_samples += (float)(samples[i]) * (float)(samples[i]);
+      squared_samples = jshGetMillisecondsFromTime(jshGetSystemTime() - start);
+    } else {
+      for(int i=0; i < length; i++) {
+        squared_samples += (float)(samples[i]) * (float)(samples[i]);
+      }
     }
     // find original Js objects for this array address
     JsVar *args[2];
@@ -130,9 +134,8 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
       args[0] = jswrap_pdm_bufferB;
     }
     args[1] = jsvNewFromFloat(squared_samples);
-    jsvUnLock(jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args));
+    jspExecuteFunction(jswrap_pdm_samples_callback, NULL, 2, args);
     jsvUnLockMany(2, args);
-    jsvUnLock(jswrap_pdm_samples_callback);
   }
 }
 
