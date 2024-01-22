@@ -117,7 +117,7 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         jswrap_pdm_filter_circular_index++;
         if(jswrap_pdm_filter_circular_index == jswrap_pdm_filter_order)
             jswrap_pdm_filter_circular_index = 0;
-        samples[i] = input_acc;
+        samples[i] = (int16_t)MIN(INT16_MAX, (INT16_MIN, input_acc));
         squared_samples += input_acc * input_acc;
       }
       squared_samples = jshGetMillisecondsFromTime(jshGetSystemTime() - start);
@@ -318,6 +318,11 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
   "generate" : "jswrap_pdm_start"
 } */
 void jswrap_pdm_start( ) {
+  if(jswrap_pdm_filter_order > 0) {
+    for(int j=0; j < jswrap_pdm_filter_order*2; j++) {
+      jswrap_pdm_delay_buffer[j] = 0.0f;
+    }
+  }
 	ret_code_t err = nrf_drv_pdm_start();
   jswrap_pdm_log_error(err); // log error if there is one
 }
