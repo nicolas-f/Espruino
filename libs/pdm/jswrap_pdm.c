@@ -50,43 +50,43 @@ JsVar* jswrap_pdm_samples_callback = NULL;
 void jswrap_pdm_log_error( ret_code_t err ) {
   switch (err) {
   case NRF_ERROR_INTERNAL:
-    jsError("PDM Internal error.\r\n");
+    jsError("ERROR_INTERNAL");
     break;
   case NRF_ERROR_NO_MEM:
-    jsError("PDM No memory for operation.\r\n");
+    jsError("NO_MEM");
     break;
   case NRF_ERROR_NOT_SUPPORTED:
-    jsError("PDM Not supported.\r\n");
+    jsError("NOT_SUPPORTED");
     break;
   case NRF_ERROR_INVALID_PARAM:
-    jsError("PDM Invalid parameter.\r\n");
+    jsError("INVALID_PARAM");
     break;
   case NRF_ERROR_INVALID_STATE:
-    jsError("PDM Module already initialized.\r\n");
+    jsError("INVALID_STATE");
     break;
   case NRF_ERROR_INVALID_LENGTH:
-    jsError("PDM Invalid length.\r\n");
+    jsError("INVALID_LENGTH");
     break;
   case NRF_ERROR_FORBIDDEN:
-    jsError("PDM Operation is forbidden.\r\n");
+    jsError("FORBIDDEN");
     break;
   case NRF_ERROR_NULL:
-    jsError("PDM Null pointer.\r\n");
+    jsError("ERROR_NULL");
     break;
   case NRF_ERROR_INVALID_ADDR:
-    jsError("PDM Bad memory address.\r\n");
+    jsError("INVALID_ADDR");
     break;
   case NRF_ERROR_BUSY:
-    jsError("PDM Busy.\r\n");
+    jsError("BUSY");
     break;
   case NRF_ERROR_DRV_TWI_ERR_OVERRUN:
-    jsError("PDM TWI error: Overrun.\r\n");
+    jsError("OVERRUN");
     break;
   case NRF_ERROR_DRV_TWI_ERR_ANACK:
-    jsError("PDM TWI error: Address not acknowledged.\r\n");
+    jsError("ERR_ANACK");
     break;
   case NRF_ERROR_DRV_TWI_ERR_DNACK:
-    jsError("PDM TWI error: Data not acknowledged.\r\n");
+    jsError("ERR_DNACK");
     break;
   default:
     break;
@@ -212,12 +212,8 @@ void jswrap_pdm_setup(JsVar *options) {
       break;
   }
 
-  if (!jshIsPinValid(pin_din)) {
-    jsError("Invalid pin supplied as an argument to Pdm.setup");
-    return;
-  }
-  if (!jshIsPinValid(pin_clock)) {
-    jsError("Invalid pin supplied as an argument to Pdm.setup");
+  if (!jshIsPinValid(pin_din) || !jshIsPinValid(pin_clock)) {
+    jsError("Invalid pin");
     return;
   }
 
@@ -238,16 +234,8 @@ void jswrap_pdm_setup(JsVar *options) {
 ]
 }*/
 void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_buf) {
-  if (!jsvIsArrayBuffer(filter_den)) {
-    jsExceptionHere(JSET_ERROR, "filter_den must be provided");
-    return;
-  }
-  if (!jsvIsArrayBuffer(filter_num)) {
-    jsExceptionHere(JSET_ERROR, "filter_num must be provided");
-    return;
-  }
-  if (!jsvIsArrayBuffer(filter_buf)) {
-    jsExceptionHere(JSET_ERROR, "filter_buf must be provided");
+  if (!jsvIsArrayBuffer(filter_den) || !jsvIsArrayBuffer(filter_num) || !jsvIsArrayBuffer(filter_buf)) {
+    jsExceptionHere(JSET_ERROR, "Missing mendatory argument");
     return;
   }
   jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
@@ -282,28 +270,20 @@ void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_
 void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
 
   if (!jsvIsFunction(callback)) {
-    jsExceptionHere(JSET_ERROR, "Function not supplied!");
-    return;
-  }
-  if (!jsvIsArrayBuffer(buffer_a)) {
-    jsExceptionHere(JSET_ERROR, "Buffer A is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return;
-  }
-  if (!jsvIsArrayBuffer(buffer_b)) {
-    jsExceptionHere(JSET_ERROR, "Buffer B is not an ArrayBuffer! call new Int16Array(arr, byteOffset, length)");
-    return;
-  }
-  if(jsvGetLength(buffer_a) != jsvGetLength(buffer_b)) {
-    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same length");
+    jsExceptionHere(JSET_ERROR, "Missing callback");
     return;
   }
   JsVarDataArrayBufferViewType arrayBufferTypeA = buffer_a->varData.arraybuffer.type;
   JsVarDataArrayBufferViewType arrayBufferTypeB = buffer_a->varData.arraybuffer.type;
-  if(!(arrayBufferTypeA == ARRAYBUFFERVIEW_INT16 && arrayBufferTypeA == arrayBufferTypeB )) {    
-    jsExceptionHere(JSET_ERROR, "The two buffers must be of the same type (Int16Array)");
+  if (!jsvIsArrayBuffer(buffer_a) || !jsvIsArrayBuffer(buffer_b) || !(arrayBufferTypeA == ARRAYBUFFERVIEW_INT16 && arrayBufferTypeA == arrayBufferTypeB )) {
+    jsExceptionHere(JSET_ERROR, "buffer!=Int16Array");
     return;
   }
-
+  if(jsvGetLength(buffer_a) != jsvGetLength(buffer_b)) {
+    jsExceptionHere(JSET_ERROR, "buffer_a.length!=buffer_b.length");
+    return;
+  }
+  
   size_t buffer_length = (int)jsvGetLength(buffer_a);
   
   jswrap_pdm_bufferA = buffer_a;
