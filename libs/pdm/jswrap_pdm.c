@@ -39,8 +39,8 @@ uint8_t        jswrap_pdm_interrupt_priority = PDM_CONFIG_IRQ_PRIORITY; ///< Int
 float_t* jswrap_pdm_w_numerator = NULL;
 float_t* jswrap_pdm_w_denominator = NULL;
 float_t* jswrap_pdm_delay_buffer = NULL;
-uint8_t jswrap_pdm_filter_order = 0;
-uint8_t jswrap_pdm_filter_circular_index = 0;
+JsVarInt jswrap_pdm_filter_order = 0;
+JsVarInt jswrap_pdm_filter_circular_index = 0;
 
 
 
@@ -102,12 +102,11 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   if(jswrap_pdm_samples_callback) {
     JsVarFloat squared_samples = 0.0f;
     if(jswrap_pdm_filter_order > 0) { // Apply signal filter
-      JsSysTime start = jshGetSystemTime();
       float_t input_acc = 0;
-      for(int i=0; i < length; i++) {
+      for(JsVarInt i=0; i < length; i++) {
         input_acc = 0;
         jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+jswrap_pdm_filter_circular_index] = samples[i];
-        for(int j=0; j < jswrap_pdm_filter_order; j++) {
+        for(JsVarInt j=0; j < jswrap_pdm_filter_order; j++) {
           input_acc += jswrap_pdm_w_numerator[j] * jswrap_pdm_delay_buffer[jswrap_pdm_filter_order+(jswrap_pdm_filter_circular_index - j) % jswrap_pdm_filter_order];
           if(j==0) continue;
           input_acc -= jswrap_pdm_w_denominator[j] * jswrap_pdm_delay_buffer[(jswrap_pdm_filter_order - j + jswrap_pdm_filter_circular_index) % jswrap_pdm_filter_order];
@@ -120,7 +119,6 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
         samples[i] = (int16_t)MIN(INT16_MAX, (INT16_MIN, input_acc));
         squared_samples += input_acc * input_acc;
       }
-      squared_samples = jshGetMillisecondsFromTime(jshGetSystemTime() - start);
     } else {
       for(int i=0; i < length; i++) {
         squared_samples += (float)(samples[i]) * (float)(samples[i]);
@@ -241,16 +239,16 @@ void jswrap_pdm_filter_init(JsVar* filter_num, JsVar* filter_den, JsVar* filter_
     jsExceptionHere(JSET_ERROR, "Missing mendatory argument");
     return;
   }
-  jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
-  if(jswrap_pdm_filter_order != (uint8_t)jsvGetLength(filter_den)) {
+  jswrap_pdm_filter_order = jsvGetLength(filter_num);
+  if(jswrap_pdm_filter_order != jsvGetLength(filter_den)) {
     jsExceptionHere(JSET_ERROR, "filter_num.length!=filter_den.length");
     return;
   }
-  if(jswrap_pdm_filter_order * 2 != (uint8_t)jsvGetLength(filter_buf)) {
+  if(jswrap_pdm_filter_order * 2 != jsvGetLength(filter_buf)) {
     jsExceptionHere(JSET_ERROR, "filter_num.length*2!=filter_buf.length");
     return;
   }
-  jswrap_pdm_filter_order = (uint8_t)jsvGetLength(filter_num);
+  jswrap_pdm_filter_order = jsvGetLength(filter_num);
   size_t sizeofar;
   jswrap_pdm_w_numerator = (float_t *)jsvGetDataPointer(filter_num, &sizeofar);
   jswrap_pdm_w_denominator = (float_t *)jsvGetDataPointer(filter_den, &sizeofar);
