@@ -100,10 +100,6 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
   // We got samples
   // Send raw or do processing
   if(jswrap_pdm_samples_callback) {
-    float squared_samples = 0.0f;
-    for(int i=0; i < length; i++) {
-      squared_samples += (float)(samples[i]) * (float)(samples[i]);
-    }
     if(jswrap_pdm_filter_order > 0) { // Apply signal filter
       float_t input_acc = 0;
       for(int i=0; i < length; i++) {
@@ -121,6 +117,10 @@ static void jswrap_pdm_handler( uint32_t * buffer, uint16_t length) {
             jswrap_pdm_filter_circular_index = 0;
         samples[i] = input_acc;
       }
+    }
+    float squared_samples = 0.0f;
+    for(int i=0; i < length; i++) {
+      squared_samples += (float)(samples[i]) * (float)(samples[i]);
     }
     // find original Js objects for this array address
     JsVar *args[2];
@@ -283,7 +283,7 @@ void jswrap_pdm_init(JsVar* callback, JsVar* buffer_a, JsVar* buffer_b) {
     jsExceptionHere(JSET_ERROR, "buffer_a.length!=buffer_b.length");
     return;
   }
-  
+
   size_t buffer_length = (int)jsvGetLength(buffer_a);
   
   jswrap_pdm_bufferA = buffer_a;
